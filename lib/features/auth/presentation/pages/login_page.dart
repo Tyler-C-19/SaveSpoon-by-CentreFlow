@@ -3,8 +3,13 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/google_sso_button.dart';
+import 'pin_verification_page.dart';
 import 'sign_up_page.dart';
 
+/// ============================================================================
+/// PAGE: LoginPage
+/// PURPOSE: Initial landing screen for user authentication (students & sellers).
+/// ============================================================================
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -13,6 +18,9 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  // ---------------------------------------------------------------------------
+  // CONTROLLERS & FORM STATE
+  // ---------------------------------------------------------------------------
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -20,26 +28,62 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    // Clean up text controllers when widget is unmounted
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // BUSINESS / AUTH LOGIC SECTION
+  // ---------------------------------------------------------------------------
+
+  /// LOGIC TO IMPLEMENT:
+  /// 1. Call AuthRepository.loginWithEmail(identifier, password).
+  /// 2. If backend requires 2FA / OTP, navigate to PinVerificationPage.
+  /// 3. If token received directly, persist session and navigate to Role-based Home.
   void _handleLogin() {
     if (_formKey.currentState?.validate() ?? false) {
+      final identifier = _identifierController.text.trim();
       debugPrint('=== [LOGIN CREDENTIALS] ===');
-      debugPrint('Username or Email: ${_identifierController.text.trim()}');
+      debugPrint('Username or Email: $identifier');
       debugPrint('Password: ${_passwordController.text}');
       debugPrint('===========================');
+
+      // Temporary flow: Direct to OTP PIN verification page
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PinVerificationPage(email: identifier),
+        ),
+      );
     }
   }
 
+  /// LOGIC TO IMPLEMENT:
+  /// 1. Trigger GoogleSignIn plugin authentication.
+  /// 2. Exchange Google auth credential with backend API.
+  /// 3. Determine if user needs profile completion or route to Home.
   void _handleGoogleSso() {
     debugPrint('=== [LOGIN WITH SSO] ===');
     debugPrint('Provider: Google');
     debugPrint('========================');
   }
 
+  /// LOGIC TO IMPLEMENT:
+  /// 1. Call backend API to request a password reset OTP for the entered identifier.
+  /// 2. Route user to PIN verification, then to PasswordResetPage.
+  void _handleForgotPassword() {
+    final identifier = _identifierController.text.trim();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PinVerificationPage(
+          email: identifier.isNotEmpty ? identifier : 'your registered email',
+        ),
+      ),
+    );
+  }
+
+  /// Navigate to Sign Up screen
   void _navigateToSignUp() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -48,6 +92,9 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // UI SECTION
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -73,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // App Brand Icon with fresh lime/yellow gradient
+                        // --- UI: App Logo Badge ---
                         Center(
                           child: Container(
                             width: 64,
@@ -106,7 +153,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Title & Subtitle
+                        // --- UI: Header & Subtitle ---
                         Text(
                           'Welcome to ${AppConstants.appName}',
                           textAlign: TextAlign.center,
@@ -127,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 28),
 
-                        // Username / Email input field
+                        // --- UI: Username / Email Input ---
                         CustomTextField(
                           controller: _identifierController,
                           label: 'Username or Email',
@@ -143,7 +190,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 18),
 
-                        // Password input field
+                        // --- UI: Password Input ---
                         CustomTextField(
                           controller: _passwordController,
                           label: 'Password',
@@ -163,9 +210,31 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
 
-                        // Login button
+                        // --- UI: Forgot Password Link ---
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _handleForgotPassword,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // --- UI: Primary Login Action Button ---
                         ElevatedButton(
                           onPressed: _handleLogin,
                           style: ElevatedButton.styleFrom(
@@ -176,7 +245,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // "or" divider
+                        // --- UI: SSO Divider ---
                         Row(
                           children: [
                             const Expanded(child: Divider(color: AppColors.border)),
@@ -195,13 +264,13 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Google SSO button
+                        // --- UI: Google SSO Button ---
                         GoogleSsoButton(
                           onPressed: _handleGoogleSso,
                         ),
                         const SizedBox(height: 24),
 
-                        // Sign up prompt
+                        // --- UI: Sign Up Navigation Footer ---
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -237,4 +306,3 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 }
-

@@ -3,12 +3,18 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/google_sso_button.dart';
+import 'pin_verification_page.dart';
 
+/// Available role types for SaveSpoon campus community
 enum UserRole {
-  customer,
-  seller,
+  customer, // Students: browse & reserve surplus meals
+  seller,   // Vendors/Kiosks: post surplus inventory to reduce waste
 }
 
+/// ============================================================================
+/// PAGE: SignUpPage
+/// PURPOSE: Registration screen allowing students or vendors to register.
+/// ============================================================================
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
 
@@ -17,11 +23,15 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+  // ---------------------------------------------------------------------------
+  // CONTROLLERS & FORM STATE
+  // ---------------------------------------------------------------------------
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
   UserRole _selectedRole = UserRole.customer;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
@@ -35,22 +45,46 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // BUSINESS / REGISTRATION LOGIC SECTION
+  // ---------------------------------------------------------------------------
+
+  /// LOGIC TO IMPLEMENT:
+  /// 1. Call AuthRepository.register(name, email, password, role).
+  /// 2. If student: send university email verification OTP.
+  /// 3. If seller: initiate seller profile creation / pending admin approval state.
+  /// 4. Forward to PinVerificationPage to verify university/business email.
   void _handleSignUp() {
     if (_formKey.currentState?.validate() ?? false) {
+      final email = _emailController.text.trim();
       debugPrint('=== [SIGN UP SUBMITTED] ===');
       debugPrint('Role: ${_selectedRole.name}');
       debugPrint('Name: ${_nameController.text.trim()}');
-      debugPrint('Email: ${_emailController.text.trim()}');
+      debugPrint('Email: $email');
       debugPrint('Password: ${_passwordController.text}');
       debugPrint('===========================');
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PinVerificationPage(email: email),
+        ),
+      );
     }
   }
 
+  /// LOGIC TO IMPLEMENT:
+  /// 1. Trigger Google Sign-in flow.
+  /// 2. Pass selected role (_selectedRole) to attach to newly created profile.
   void _handleGoogleSignUp() {
     debugPrint('=== [GOOGLE SIGN UP CLICKED] ===');
     debugPrint('Role selected: ${_selectedRole.name}');
   }
 
+  // ---------------------------------------------------------------------------
+  // UI HELPER WIDGETS
+  // ---------------------------------------------------------------------------
+
+  /// Card widget for selecting between Customer and Seller roles
   Widget _buildRoleCard({
     required UserRole role,
     required String title,
@@ -117,6 +151,9 @@ class _SignUpPageState extends State<SignUpPage> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // UI SECTION
+  // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,7 +185,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // App Brand badge
+                        // --- UI: Brand Badge ---
                         Center(
                           child: Container(
                             width: 60,
@@ -169,6 +206,8 @@ class _SignUpPageState extends State<SignUpPage> {
                           ),
                         ),
                         const SizedBox(height: 18),
+
+                        // --- UI: Header & Subtitle ---
                         const Text(
                           'Create Account',
                           textAlign: TextAlign.center,
@@ -189,7 +228,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Role Selection: Placed above all input fields
+                        // --- UI: Role Selection (Customer / Seller) ---
                         const Text(
                           'I want to join as',
                           style: TextStyle(
@@ -218,7 +257,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 22),
 
-                        // Full name field
+                        // --- UI: Full Name Input ---
                         CustomTextField(
                           controller: _nameController,
                           label: 'Full Name',
@@ -233,7 +272,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Email field
+                        // --- UI: Email Input ---
                         CustomTextField(
                           controller: _emailController,
                           label: 'Email',
@@ -252,7 +291,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Password field
+                        // --- UI: Password Input ---
                         CustomTextField(
                           controller: _passwordController,
                           label: 'Password',
@@ -277,7 +316,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Confirm password field
+                        // --- UI: Confirm Password Input ---
                         CustomTextField(
                           controller: _confirmPasswordController,
                           label: 'Confirm Password',
@@ -302,7 +341,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Sign up button
+                        // --- UI: Sign Up Button ---
                         ElevatedButton(
                           onPressed: _handleSignUp,
                           style: ElevatedButton.styleFrom(
@@ -313,7 +352,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Divider
+                        // --- UI: SSO Divider ---
                         Row(
                           children: [
                             const Expanded(child: Divider(color: AppColors.border)),
@@ -332,14 +371,14 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                         const SizedBox(height: 20),
 
-                        // SSO Google button
+                        // --- UI: Google SSO Button ---
                         GoogleSsoButton(
                           text: 'Sign up with Google',
                           onPressed: _handleGoogleSignUp,
                         ),
                         const SizedBox(height: 20),
 
-                        // Back to login
+                        // --- UI: Back to Login Footer ---
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
