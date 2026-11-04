@@ -1,21 +1,30 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const User = require('./models/User');
-const Vendor = require('./models/Vendor');
-const Listing = require('./models/Listing');
+const User = require('../src/models/User');
+const Vendor = require('../src/models/Vendor');
+const Listing = require('../src/models/Listing');
+const { parseResetArgs, RESET_FLAG, CONFIRM_FLAG } = require('./resetGuard');
 
 const hoursFromNow = (h) => new Date(Date.now() + h * 60 * 60 * 1000);
 const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
 
 async function seed() {
+  const { reset, blocked } = parseResetArgs(process.argv);
+  if (blocked) {
+    console.log('Nothing changed. --reset wipes data for the WHOLE TEAM, so warn them first.');
+    console.log(`To go ahead run: npm run seed -- ${RESET_FLAG} ${CONFIRM_FLAG}`);
+    return;
+  }
+
   await mongoose.connect(process.env.MONGODB_URI);
   await Promise.all([User.init(), Vendor.init(), Listing.init()]);
 
-  const reset = process.argv.includes('--reset');
   if ((await User.countDocuments()) > 0 && !reset) {
-    console.log('Database already has data. To wipe and reseed run: npm run seed -- --reset');
+    console.log('Database already has data, so nothing changed.');
+    console.log(`To wipe and reseed run: npm run seed -- ${RESET_FLAG} ${CONFIRM_FLAG}`);
     return;
   }
   if (reset) {
@@ -26,14 +35,15 @@ async function seed() {
   }
 
   const passwordHash = await bcrypt.hash('Password123', 10);
+  const account = (fields) => ({ passwordHash, emailVerified: true, ...fields });
 
-  const [admin, vendorUser1, vendorUser2, vendorUser3, student1, student2] = await User.insertMany([
-    { name: 'Admin User', email: 'admin@savespoon.test', passwordHash, role: 'admin' },
-    { name: 'Pak Din', email: 'vendor1@savespoon.test', passwordHash, role: 'vendor' },
-    { name: 'Cendana Owner', email: 'vendor2@savespoon.test', passwordHash, role: 'vendor' },
-    { name: 'Kak Ina', email: 'vendor3@savespoon.test', passwordHash, role: 'vendor' },
-    { name: 'Student One', email: 'student1@savespoon.test', passwordHash, role: 'student' },
-    { name: 'Student Two', email: 'student2@savespoon.test', passwordHash, role: 'student' },
+  const [, vendorUser1, vendorUser2, vendorUser3] = await User.insertMany([
+    account({ name: 'Admin User', email: 'admin@savespoon.test', phone: '012-3456780', role: 'admin' }),
+    account({ name: 'Pak Din', email: 'vendor1@savespoon.test', phone: '012-3456781', role: 'vendor' }),
+    account({ name: 'Cendana Owner', email: 'vendor2@savespoon.test', phone: '012-3456782', role: 'vendor' }),
+    account({ name: 'Kak Ina', email: 'vendor3@savespoon.test', phone: '012-3456783', role: 'vendor' }),
+    account({ name: 'Customer One', email: 'customer1@savespoon.test', phone: '012-3456784', role: 'customer' }),
+    account({ name: 'Customer Two', email: 'customer2@savespoon.test', phone: '012-3456785', role: 'customer' }),
   ]);
 
   const [stall1, stall2, stall3] = await Vendor.insertMany([
