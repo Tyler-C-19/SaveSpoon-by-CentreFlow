@@ -393,6 +393,8 @@ void main() {
       googleAuth: google,
       onRequest: (_) async => jsonResponse({'user': userJson}),
     );
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
     await tapButton(tester, 'Log out');
     expect(google.signOuts, 1);
   });
@@ -443,6 +445,8 @@ void main() {
       storage: storage,
       onRequest: (_) async => jsonResponse({'user': userJson}),
     );
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
     await tapButton(tester, 'Log out');
     expect(find.byType(LoginPage), findsOneWidget);
     expect(storage.token, isNull);

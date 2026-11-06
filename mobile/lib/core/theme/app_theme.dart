@@ -113,6 +113,28 @@ abstract final class AppTheme {
       checkboxTheme: CheckboxThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 64,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        indicatorColor: colorScheme.primaryContainer,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.primary
+                : AppColors.textMuted,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.primary
+                : AppColors.textMuted,
+          ),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
