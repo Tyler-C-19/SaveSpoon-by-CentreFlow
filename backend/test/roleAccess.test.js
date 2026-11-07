@@ -10,6 +10,7 @@ const express = require('express');
 
 const app = require('../src/app');
 const User = require('../src/models/User');
+const Vendor = require('../src/models/Vendor');
 const googleService = require('../src/services/googleService');
 const { requireRole } = require('../src/middleware/auth');
 const { signToken } = require('../src/services/tokenService');
@@ -132,6 +133,7 @@ test('customers and vendors still log in', async () => {
   for (const role of ['customer', 'vendor']) {
     const user = makeUser(role);
     mock.method(User, 'findOne', () => query(user));
+    mock.method(Vendor, 'exists', async () => null);
     const res = await call(app, '/api/auth/login', {
       method: 'POST',
       body: { email: user.email, password: PASSWORD },

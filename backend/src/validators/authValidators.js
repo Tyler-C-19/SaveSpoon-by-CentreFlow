@@ -52,5 +52,5 @@ function googleProfileError(body = {}) {
 }
 
 module.exports = {
-  normaliseEmail, passwordError, emailError, codeError, registrationError, googleProfileError, isText,
+  normaliseEmail, passwordError, emailError, codeError, registrationError, googleProfileError, isText, PHONE_PATTERN,
 };

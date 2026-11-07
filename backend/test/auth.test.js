@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const app = require('../src/app');
 const User = require('../src/models/User');
+const Vendor = require('../src/models/Vendor');
 const otpService = require('../src/services/otpService');
 const emailService = require('../src/services/emailService');
 const googleService = require('../src/services/googleService');
@@ -30,6 +31,7 @@ const query = (doc) => {
 
 beforeEach(() => {
   mock.restoreAll();
+  mock.method(Vendor, 'exists', async () => null);
   users = new Map();
   emails = [];
   logged = [];
