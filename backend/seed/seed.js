@@ -7,11 +7,35 @@ const User = require('../src/models/User');
 const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const { parseResetArgs, RESET_FLAG, CONFIRM_FLAG } = require('./resetGuard');
+const { sampleListings, STALL_NAMES } = require('./sampleListings');
 
-const hoursFromNow = (h) => new Date(Date.now() + h * 60 * 60 * 1000);
+const LISTINGS_FLAG = '--listings';
 const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
 
+async function seedListingsOnly() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  await Listing.init();
+
+  if ((await Listing.countDocuments()) > 0) {
+    console.log('Listings already exist, so nothing changed.');
+    return;
+  }
+  const found = await Vendor.find({ stallName: { $in: STALL_NAMES } });
+  const stalls = STALL_NAMES.map((name) => found.find((vendor) => vendor.stallName === name));
+  if (stalls.includes(undefined)) {
+    console.log('The seeded vendors are missing, so nothing changed.');
+    return;
+  }
+  await Listing.insertMany(sampleListings(stalls));
+  console.log('Seeded: 6 listings.');
+}
+
 async function seed() {
+  if (process.argv.includes(LISTINGS_FLAG)) {
+    await seedListingsOnly();
+    return;
+  }
+
   const { reset, blocked } = parseResetArgs(process.argv);
   if (blocked) {
     console.log('Nothing changed. --reset wipes data for the WHOLE TEAM, so warn them first.');
@@ -61,40 +85,7 @@ async function seed() {
     },
   ]);
 
-  const make = (stall, fields) => ({ vendor: stall._id, location: stall.location, ...fields });
-
-  await Listing.insertMany([
-    make(stall1, {
-      title: 'Nasi Campur Set', description: 'Rice with 2 dishes and a vegetable',
-      originalPrice: 8, discountedPrice: 4.5, quantityAvailable: 6,
-      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['egg'],
-    }),
-    make(stall1, {
-      title: 'Ayam Goreng Rice', description: 'Fried chicken with rice and sambal',
-      originalPrice: 7, discountedPrice: 4, quantityAvailable: 4,
-      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['soy'],
-    }),
-    make(stall2, {
-      title: 'Mee Goreng Mamak', description: 'Spicy fried noodles with egg',
-      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 8,
-      pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'egg', 'soy'],
-    }),
-    make(stall2, {
-      title: 'Roti Canai (2 pcs) with Dhal', description: 'Fresh roti canai with dhal',
-      originalPrice: 3.5, discountedPrice: 2, quantityAvailable: 10,
-      pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'milk'],
-    }),
-    make(stall3, {
-      title: 'Chicken Sandwich', description: 'Grilled chicken, lettuce and mayo',
-      originalPrice: 5, discountedPrice: 3, quantityAvailable: 5,
-      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(2), allergens: ['gluten', 'egg'],
-    }),
-    make(stall3, {
-      title: 'Assorted Kuih Box', description: 'Box of 6 mixed kuih',
-      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 0,
-      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['coconut', 'gluten'], status: 'sold_out',
-    }),
-  ]);
+  await Listing.insertMany(sampleListings([stall1, stall2, stall3]));
 
   console.log('Seeded: 5 users, 3 vendors, 6 listings.');
   console.log('Test login password for every seeded account: Password123');
