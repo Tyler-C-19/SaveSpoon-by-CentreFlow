@@ -10,6 +10,7 @@ import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/google_auth_service.dart';
 import 'features/auth/data/token_storage.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/seller_profile/data/vendor_repository.dart';
 
 void main() {
   runApp(const SaveSpoonApp());
@@ -63,8 +64,11 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<AuthProvider>.value(
-      value: _auth,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthProvider>.value(value: _auth),
+        Provider<VendorRepository>(create: (_) => VendorRepository(_api)),
+      ],
       child: MaterialApp.router(
         title: 'SaveSpoon',
         debugShowCheckedModeBanner: false,

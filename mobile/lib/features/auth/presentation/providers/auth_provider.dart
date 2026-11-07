@@ -75,6 +75,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> verifyEmail(String email, String code) async =>
       _setSignedIn(await repository.verifyEmail(email, code));
 
+  Future<void> markVendorProfileSaved() async {
+    final updated = _user!.withVendorProfile();
+    await repository.cacheUser(updated);
+    _setSignedIn(updated);
+  }
+
   Future<void> logout() async {
     await _clearAndSignOut();
     try {

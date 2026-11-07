@@ -7,6 +7,7 @@
     "dev": "nodemon src/server.js",
     "seed": "node seed/seed.js",
     "create-admin": "node scripts/createAdmin.js",
+    "refresh-locations": "node scripts/refreshVendorLocations.js",
     "test": "node --test test/"
   },
   "keywords": [],

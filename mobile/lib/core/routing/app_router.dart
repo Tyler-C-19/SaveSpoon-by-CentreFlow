@@ -13,6 +13,7 @@ import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/home/presentation/pages/placeholder_page.dart';
 import '../../features/home/presentation/widgets/role_shell.dart';
+import '../../features/seller_profile/presentation/pages/vendor_setup_page.dart';
 import '../theme/app_theme.dart';
 
 abstract final class AppRoutes {
@@ -27,6 +28,7 @@ abstract final class AppRoutes {
   static const String customerSearch = '/customer/search';
   static const String customerOrders = '/customer/orders';
   static const String customerProfile = '/customer/profile';
+  static const String vendorSetup = '/vendor/setup';
   static const String vendorHome = '/vendor/home';
   static const String vendorListings = '/vendor/listings';
   static const String vendorOrders = '/vendor/orders';
@@ -40,6 +42,7 @@ String? resolveRedirect({
   required String location,
   required bool signedIn,
   String? role,
+  bool needsVendorSetup = false,
 }) {
   if (location == AppRoutes.splash) return null;
 
@@ -48,6 +51,10 @@ String? resolveRedirect({
         location.startsWith('/customer/') || location.startsWith('/vendor/');
     return inApp ? AppRoutes.login : null;
   }
+  if (needsVendorSetup) {
+    return location == AppRoutes.vendorSetup ? null : AppRoutes.vendorSetup;
+  }
+  if (location == AppRoutes.vendorSetup) return AppRoutes.homeFor(role);
   return location.startsWith('/$role/') ? null : AppRoutes.homeFor(role);
 }
 
@@ -73,6 +80,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
     location: state.matchedLocation,
     signedIn: auth.status == AuthStatus.authenticated,
     role: auth.user?.role,
+    needsVendorSetup: auth.user?.needsVendorSetup ?? false,
   ),
   routes: [
     GoRoute(
@@ -113,6 +121,11 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       path: AppRoutes.resetPassword,
       builder: (context, state) =>
           ResetPasswordPage(email: state.extra as String),
+    ),
+    GoRoute(
+      path: AppRoutes.vendorSetup,
+      pageBuilder: (context, state) =>
+          _fadeInPage(state, const VendorSetupPage()),
     ),
     StatefulShellRoute.indexedStack(
       pageBuilder: (context, state, shell) => _fadeInPage(

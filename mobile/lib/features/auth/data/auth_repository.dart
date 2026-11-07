@@ -113,7 +113,15 @@ class AuthRepository {
 
   Future<AuthUser> fetchCurrentUser() async {
     final data = await api.get('/api/auth/me');
-    return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+    final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+    await cacheUser(user);
+    return user;
+  }
+
+  Future<void> cacheUser(AuthUser user) async {
+    final token = await storage.readToken();
+    if (token == null) return;
+    await storage.save(token: token, userJson: jsonEncode(user.toJson()));
   }
 
   Future<AuthUser?> readCachedUser() async {
