@@ -14,10 +14,13 @@ import '../providers/auth_provider.dart';
 import '../widgets/brand_header.dart';
 
 class LoginPage extends StatelessWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.sheetRises = true});
+
+  final bool sheetRises;
 
   @override
   Widget build(BuildContext context) {
+    final rise = sheetRises && !MediaQuery.disableAnimationsOf(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
@@ -32,7 +35,22 @@ class LoginPage extends StatelessWidget {
                   children: [
                     SizedBox(height: MediaQuery.paddingOf(context).top),
                     Center(child: BrandHeader.logo()),
-                    const Expanded(child: LoginSheet()),
+                    Expanded(
+                      child: TweenAnimationBuilder<Offset>(
+                        tween: Tween(
+                          begin: Offset(0, rise ? 1 : 0),
+                          end: Offset.zero,
+                        ),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, offset, child) =>
+                            FractionalTranslation(
+                              translation: offset,
+                              child: child,
+                            ),
+                        child: const LoginSheet(),
+                      ),
+                    ),
                   ],
                 ),
               ),

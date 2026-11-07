@@ -18,6 +18,8 @@ class AuthUser {
   final String email;
   final String role;
 
+  bool get canUseMobileApp => role == 'customer' || role == 'vendor';
+
   Map<String, dynamic> toJson() => {
     '_id': id,
     'name': name,

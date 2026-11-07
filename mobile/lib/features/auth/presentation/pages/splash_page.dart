@@ -24,11 +24,17 @@ class SplashPage extends StatefulWidget {
   State<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
-    with SingleTickerProviderStateMixin {
+class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
+  // Just before the logo starts moving towards the login layout.
+  static const double _decisionPoint = 0.56;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: SplashPage.displayTime,
+  );
+  late final AnimationController _fadeOut = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
   );
   late final Animation<double> _circle = CurvedAnimation(
     parent: _controller,
@@ -60,34 +66,66 @@ class _SplashPageState extends State<SplashPage>
 
   Timer? _timer;
   late final AuthProvider _auth = context.read<AuthProvider>();
+  bool _started = false;
+  bool _animationsOff = false;
   bool _timeUp = false;
+  bool _leaving = false;
+
+  bool get _atDecisionPoint =>
+      _animationsOff ? _timeUp : _controller.value >= _decisionPoint;
 
   @override
   void initState() {
     super.initState();
-    _auth.addListener(_leaveWhenReady);
-    _timer = Timer(SplashPage.displayTime, () {
-      _timeUp = true;
-      _leaveWhenReady();
+    _auth.addListener(_decide);
+    _controller.addListener(_decide);
+  }
+
+  void _decide() {
+    if (_leaving || !mounted || !_atDecisionPoint) return;
+    switch (_auth.status) {
+      case AuthStatus.unknown:
+        _controller.stop();
+      case AuthStatus.authenticated:
+        _goHome();
+      case AuthStatus.unauthenticated:
+        _continueToLogin();
+    }
+  }
+
+  void _goHome() {
+    _leaving = true;
+    _controller.stop();
+    final home = AppRoutes.homeFor(_auth.user!.role);
+    if (_animationsOff) return context.go(home);
+    _fadeOut.forward().whenComplete(() {
+      if (mounted) context.go(home);
     });
   }
 
-  void _leaveWhenReady() {
-    if (!_timeUp || !mounted || _auth.status == AuthStatus.unknown) return;
-    _auth.removeListener(_leaveWhenReady);
-    context.go(
-      _auth.status == AuthStatus.authenticated
-          ? AppRoutes.home
-          : AppRoutes.login,
-    );
+  void _continueToLogin() {
+    if (_controller.isCompleted) {
+      _leaving = true;
+      context.go(AppRoutes.login, extra: AppRoutes.splash);
+    } else if (_animationsOff) {
+      _controller.value = 1;
+    } else if (!_controller.isAnimating) {
+      _controller.forward();
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_controller.isAnimating || _controller.isCompleted) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _controller.value = 1;
+    if (_started) return;
+    _started = true;
+    _animationsOff = MediaQuery.disableAnimationsOf(context);
+    if (_animationsOff) {
+      _controller.value = _decisionPoint;
+      _timer = Timer(SplashPage.displayTime, () {
+        _timeUp = true;
+        _decide();
+      });
     } else {
       _controller.forward();
     }
@@ -96,8 +134,9 @@ class _SplashPageState extends State<SplashPage>
   @override
   void dispose() {
     _timer?.cancel();
-    _auth.removeListener(_leaveWhenReady);
+    _auth.removeListener(_decide);
     _controller.dispose();
+    _fadeOut.dispose();
     super.dispose();
   }
 
@@ -190,6 +229,14 @@ class _SplashPageState extends State<SplashPage>
               'Save food. Save money.',
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(color: AppColors.onBrand),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: FadeTransition(
+                opacity: _fadeOut,
+                child: const ColoredBox(color: AppColors.page),
+              ),
             ),
           ),
         ],
