@@ -47,4 +47,4 @@ async function updateMine(req, res) {
   return res.json({ vendor });
 }
 
-module.exports = { getMine, createMine, updateMine };
+module.exports = { getMine, createMine, updateMine, NO_PROFILE };
