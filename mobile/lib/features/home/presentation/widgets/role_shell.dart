@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/brand_title.dart';
 
 class RoleTab {
   const RoleTab(this.label, this.icon);
@@ -36,6 +37,11 @@ class RoleShell extends StatelessWidget {
     return Scaffold(
       extendBody: true,
       backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        centerTitle: false,
+        title: const BrandTitle(),
+      ),
       body: shell,
       bottomNavigationBar: SafeArea(
         top: false,

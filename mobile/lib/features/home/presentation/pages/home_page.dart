@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/brand_title.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../seller_profile/presentation/widgets/profile_banner.dart';
 
@@ -23,8 +22,6 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const BrandTitle(),
-                    const SizedBox(height: AppSpacing.lg),
                     Text(
                       'Welcome back, ${auth.user?.name ?? ''}',
                       textAlign: TextAlign.center,
