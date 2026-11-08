@@ -44,10 +44,12 @@ function buildOtpEmail(name, code, purpose) {
 
   const text = `Hi ${name},\n\n${intro}\n\nYour OTP is: ${code}\n\n${notYou}\n`;
 
+  // A table row keeps the six boxes on one line and lets them narrow on small screens.
   const digits = [...code]
-    .map((digit) => '<span style="display:inline-block;width:40px;height:50px;line-height:50px;margin-right:6px;'
+    .map((digit, index) => `<td style="width:16.66%;padding-right:${index === code.length - 1 ? 0 : 6}px;">`
+      + '<span style="display:block;height:50px;line-height:50px;'
       + 'background:#ffffff;border-radius:8px;text-align:center;font-family:Consolas,Menlo,monospace;'
-      + `font-size:26px;font-weight:700;color:#1B8A3A;">${digit}</span>`)
+      + `font-size:26px;font-weight:700;color:#1B8A3A;">${digit}</span></td>`)
     .join('');
 
   const html = `<!doctype html>
@@ -63,7 +65,7 @@ function buildOtpEmail(name, code, purpose) {
         <p style="margin:0 0 20px;">${escapeHtml(intro)}</p>
         <div style="padding:18px 20px;background:#E8F5EA;border-radius:12px;">
           <div style="margin-bottom:12px;font-size:14px;font-weight:700;">Code requested</div>
-          <div>${digits}</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:270px;"><tr>${digits}</tr></table>
         </div>
         <p style="margin:20px 0 0;font-size:13px;color:#6b7280;">${escapeHtml(notYou)}</p>
       </td>

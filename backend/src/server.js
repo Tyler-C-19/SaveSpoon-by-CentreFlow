@@ -5,6 +5,9 @@ const app = require('./app');
 
 const PORT = process.env.PORT || 5000;
 
+// Hosts such as Render sit behind one proxy, so the client's IP comes from its header.
+app.set('trust proxy', 1);
+
 const missing = ['MONGODB_URI', 'JWT_SECRET', 'EMAIL_USER', 'EMAIL_APP_PASSWORD', 'GOOGLE_CLIENT_ID'].filter((key) => !process.env[key]);
 if (missing.length) {
   console.error(`Missing from backend/.env: ${missing.join(', ')}`);
