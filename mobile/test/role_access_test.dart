@@ -63,10 +63,7 @@ void main() {
     });
 
     test('sends signed-out users to login', () {
-      expect(
-        redirect(AppRoutes.vendorHome, signedIn: false),
-        AppRoutes.login,
-      );
+      expect(redirect(AppRoutes.vendorHome, signedIn: false), AppRoutes.login);
       expect(
         redirect(AppRoutes.customerHome, signedIn: false),
         AppRoutes.login,
@@ -294,10 +291,20 @@ void main() {
     expect(bar.bottom, lessThan(screen.bottom));
   });
 
+  testWidgets('every tab shows the SaveSpoon header', (tester) async {
+    await startAs(tester, 'vendor');
+
+    for (final tab in ['Home', 'Orders', 'Profile']) {
+      await tester.tap(find.text(tab).last);
+      await tester.pumpAndSettle();
+      expect(find.text('SaveSpoon'), findsOneWidget, reason: tab);
+    }
+  });
+
   testWidgets('tabs open their placeholder pages', (tester) async {
     await startAs(tester, 'vendor');
 
-    await tester.tap(find.text('Listings'));
+    await tester.tap(find.text('Orders'));
     await tester.pumpAndSettle();
 
     expect(find.text('Coming soon'), findsOneWidget);
@@ -308,9 +315,8 @@ void main() {
   ) async {
     await startAs(tester, 'vendor');
 
-    GoRouter.of(
-      tester.element(find.byType(HomePage)),
-    ).go(AppRoutes.customerOrders);
+    GoRouter.of(tester.element(find.byType(HomePage)))
+        .go(AppRoutes.customerOrders);
     await tester.pumpAndSettle();
 
     expect(find.text('Listings'), findsOneWidget);
@@ -348,10 +354,8 @@ void main() {
     await startApp(
       tester,
       storage: storage,
-      onRequest: (_) async => jsonResponse({
-        'error': message,
-        'code': 'ADMIN_USE_DASHBOARD',
-      }, 403),
+      onRequest: (_) async =>
+          jsonResponse({'error': message, 'code': 'ADMIN_USE_DASHBOARD'}, 403),
     );
 
     await tester.enterText(
