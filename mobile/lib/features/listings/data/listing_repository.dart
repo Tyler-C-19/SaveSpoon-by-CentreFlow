@@ -11,10 +11,33 @@ class AllergenSuggestion {
   final List<String> otherAllergens;
 }
 
+class ListingPage {
+  const ListingPage({required this.listings, required this.hasMore});
+
+  final List<Listing> listings;
+  final bool hasMore;
+}
+
 class ListingRepository {
   ListingRepository(this.api);
 
   final ApiClient api;
+
+  List<Listing> _parseListings(dynamic data) => [
+    for (final item in data['listings'] as List? ?? const [])
+      Listing.fromJson(item as Map<String, dynamic>),
+  ];
+
+  Future<ListingPage> fetchAvailable({int page = 1}) async {
+    final data = await api.get('/api/listings?page=$page');
+    return ListingPage(
+      listings: _parseListings(data),
+      hasMore: data['hasMore'] as bool? ?? false,
+    );
+  }
+
+  Future<List<Listing>> fetchRunningOut() async =>
+      _parseListings(await api.get('/api/listings/running-out'));
 
   Future<Listing> create({
     required String title,

@@ -21,10 +21,18 @@ abstract final class ListingOptions {
     'coconut',
     'belacan',
   ];
+
+  static const int lowStockLimit = 5;
+  static const Duration endingSoonWindow = Duration(hours: 1);
+  static const Duration newWindow = Duration(hours: 1);
 }
+
+enum ListingBadge { lowStock, endingSoon, isNew }
 
 String allergenLabel(String value) =>
     '${value[0].toUpperCase()}${value.substring(1)}';
+
+String moneyLabel(double value) => 'RM ${value.toStringAsFixed(2)}';
 
 class Listing {
   const Listing({
@@ -41,6 +49,8 @@ class Listing {
     this.description,
     this.category,
     this.isHalal,
+    this.stallName,
+    this.createdAt,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) => Listing(
@@ -60,6 +70,10 @@ class Listing {
         item as String,
     ],
     status: json['status'] as String,
+    stallName: json['stallName'] as String?,
+    createdAt: json['createdAt'] == null
+        ? null
+        : DateTime.parse(json['createdAt'] as String).toLocal(),
   );
 
   final String id;
@@ -75,6 +89,43 @@ class Listing {
   final List<String> allergens;
   final List<String> otherAllergens;
   final String status;
+  final String? stallName;
+  final DateTime? createdAt;
+
+  int get savePercent =>
+      ((originalPrice - discountedPrice) / originalPrice * 100).round();
+
+  ListingBadge? badgeAt(DateTime time) {
+    if (!isAvailableAt(time)) return null;
+    if (isLowStock) return ListingBadge.lowStock;
+    if (pickupEnd.difference(time) <= ListingOptions.endingSoonWindow) {
+      return ListingBadge.endingSoon;
+    }
+    final created = createdAt;
+    if (created != null &&
+        time.difference(created) <= ListingOptions.newWindow) {
+      return ListingBadge.isNew;
+    }
+    return null;
+  }
+
+  String? unlistedLabelAt(DateTime time) {
+    if (isAvailableAt(time)) return null;
+    if (quantityAvailable <= 0 || status == 'sold_out') {
+      return 'Unlisted - No Stock';
+    }
+    if (!pickupEnd.isAfter(time)) return 'Unlisted - Pickup Ended';
+    return 'Unlisted';
+  }
+
+  bool isAvailableAt(DateTime time) =>
+      status == 'active' && quantityAvailable > 0 && pickupEnd.isAfter(time);
+
+  bool get isLowStock =>
+      quantityAvailable > 0 &&
+      quantityAvailable <= ListingOptions.lowStockLimit;
+
+  String get lowStockLabel => 'Only $quantityAvailable left!';
 
   String get allergenSummary {
     final names = [...allergens.map(allergenLabel), ...otherAllergens];
