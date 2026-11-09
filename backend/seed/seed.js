@@ -11,8 +11,10 @@ const Cart = require('../src/models/Cart');
 const { parseResetArgs, RESET_FLAG, CONFIRM_FLAG } = require('./resetGuard');
 const { sampleListings, STALL_NAMES } = require('./sampleListings');
 const { sampleOrders, sampleCart, SEED_REQUEST_PREFIX } = require('./sampleOrders');
+const { sampleSearchListings, sampleRefreshOps } = require('./sampleSearchListings');
 
 const LISTINGS_FLAG = '--listings';
+const SEARCH_SAMPLES_FLAG = '--search-samples';
 const CUSTOMER_EMAILS = ['customer1@savespoon.test', 'customer2@savespoon.test'];
 const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
 
@@ -49,7 +51,26 @@ async function seedListingsOnly() {
   console.log('Seeded: 6 listings, 4 orders, 1 cart.');
 }
 
+async function seedSearchSamples() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  await Listing.init();
+
+  const found = await Vendor.find({ stallName: { $in: STALL_NAMES } });
+  const stalls = STALL_NAMES.map((name) => found.find((vendor) => vendor.stallName === name));
+  if (stalls.includes(undefined)) {
+    console.log('The seeded vendors are missing, so nothing changed.');
+    return;
+  }
+  const samples = [...sampleListings(stalls), ...sampleSearchListings(stalls)];
+  const result = await Listing.bulkWrite(sampleRefreshOps(samples));
+  console.log(`Search samples: ${result.upsertedCount} added, ${result.matchedCount} refreshed. Other listings unchanged.`);
+}
+
 async function seed() {
+  if (process.argv.includes(SEARCH_SAMPLES_FLAG)) {
+    await seedSearchSamples();
+    return;
+  }
   if (process.argv.includes(LISTINGS_FLAG)) {
     await seedListingsOnly();
     return;
