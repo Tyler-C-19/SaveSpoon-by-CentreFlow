@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../features/auth/data/auth_repository.dart';
 import '../../features/auth/presentation/pages/complete_google_page.dart';
@@ -10,12 +11,18 @@ import '../../features/auth/presentation/pages/reset_password_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/presentation/pages/verify_email_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/cart/presentation/pages/cart_page.dart';
+import '../../features/cart/presentation/providers/cart_provider.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/home/presentation/pages/placeholder_page.dart';
 import '../../features/home/presentation/widgets/role_shell.dart';
 import '../../features/listings/domain/listing.dart';
 import '../../features/listings/presentation/pages/add_listing_page.dart';
+import '../../features/listings/presentation/pages/food_details_page.dart';
 import '../../features/listings/presentation/pages/vendor_listings_page.dart';
+import '../../features/listings/presentation/providers/listing_changes.dart';
+import '../../features/orders/domain/order.dart';
+import '../../features/orders/presentation/pages/order_confirmation_page.dart';
 import '../../features/seller_profile/presentation/pages/vendor_setup_page.dart';
 import '../theme/app_theme.dart';
 
@@ -29,7 +36,10 @@ abstract final class AppRoutes {
   static const String completeGoogle = '/complete-google';
   static const String customerHome = '/customer/home';
   static const String customerSearch = '/customer/search';
+  static const String customerCart = '/customer/cart';
   static const String customerOrders = '/customer/orders';
+  static const String foodDetails = '/customer/food/:id';
+  static const String orderConfirmation = '/customer/order-placed';
   static const String customerProfile = '/customer/profile';
   static const String vendorSetup = '/vendor/setup';
   static const String vendorHome = '/vendor/home';
@@ -37,6 +47,8 @@ abstract final class AppRoutes {
   static const String vendorAddListing = '/vendor/listings/new';
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
+
+  static String foodDetailsFor(String id) => '/customer/food/$id';
 
   static String homeFor(String? role) =>
       role == 'vendor' ? vendorHome : customerHome;
@@ -96,6 +108,19 @@ Page<T> _slideInPage<T>(GoRouterState state, Widget child) =>
           ),
       child: child,
     );
+
+void _openConfirmation(BuildContext context, List<Order> orders) {
+  context.read<ListingChanges>().markChanged();
+  context.push<void>(AppRoutes.orderConfirmation, extra: orders);
+}
+
+void _replaceWithConfirmation(BuildContext context, List<Order> orders) {
+  context.read<ListingChanges>().markChanged();
+  context.pushReplacement(AppRoutes.orderConfirmation, extra: orders);
+}
+
+Future<String> _addToCart(BuildContext context, String id, int quantity) =>
+    context.read<CartProvider>().addItem(id, quantity);
 
 GoRouter createAppRouter(AuthProvider auth) => GoRouter(
   initialLocation: AppRoutes.splash,
@@ -160,6 +185,27 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       pageBuilder: (context, state) =>
           _slideInPage<Listing>(state, const AddListingPage()),
     ),
+    GoRoute(
+      path: AppRoutes.foodDetails,
+      pageBuilder: (context, state) => _slideInPage<String>(
+        state,
+        FoodDetailsPage(
+          listingId: state.pathParameters['id']!,
+          onAddToCart: _addToCart,
+          onOrdered: _replaceWithConfirmation,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.orderConfirmation,
+      pageBuilder: (context, state) => _slideInPage<void>(
+        state,
+        OrderConfirmationPage(
+          orders: state.extra as List<Order>,
+          onDone: (context) => context.go(AppRoutes.customerHome),
+        ),
+      ),
+    ),
     StatefulShellRoute.indexedStack(
       pageBuilder: (context, state, shell) => _fadeInPage(
         state,
@@ -168,6 +214,10 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       branches: [
         _tab(AppRoutes.customerHome, const HomePage(showBrowse: true)),
         _tab(AppRoutes.customerSearch, const PlaceholderPage(title: 'Search')),
+        _tab(
+          AppRoutes.customerCart,
+          const CartPage(onOrdered: _openConfirmation),
+        ),
         _tab(AppRoutes.customerOrders, const PlaceholderPage(title: 'Orders')),
         _tab(AppRoutes.customerProfile, const ProfilePlaceholderPage()),
       ],

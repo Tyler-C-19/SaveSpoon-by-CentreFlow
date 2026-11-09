@@ -27,11 +27,16 @@ Map<String, dynamic> _savedListing() {
   };
 }
 
+var _saved = false;
+
 Future<http.Response> _server(http.Request request) async {
   if (request.url.path == '/api/listings/mine') {
-    return jsonResponse({'listings': []});
+    return jsonResponse({
+      'listings': [if (_saved) _savedListing()],
+    });
   }
   if (request.url.path == '/api/listings') {
+    _saved = true;
     return jsonResponse({'listing': _savedListing()}, 201);
   }
   return jsonResponse({
@@ -41,6 +46,7 @@ Future<http.Response> _server(http.Request request) async {
 }
 
 Future<void> _openListingsTab(WidgetTester tester) async {
+  _saved = false;
   await startApp(
     tester,
     storage: FakeTokenStorage(token: 'saved'),

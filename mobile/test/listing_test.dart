@@ -313,7 +313,11 @@ void main() {
     testWidgets('saves and the listing appears straight away', (tester) async {
       Map<String, dynamic>? sent;
       await _pumpPages(tester, (request) async {
-        if (request.method == 'GET') return jsonResponse({'listings': []});
+        if (request.method == 'GET') {
+          return jsonResponse({
+            'listings': [if (sent != null) _listingJson()],
+          });
+        }
         sent = jsonDecode(request.body) as Map<String, dynamic>;
         return jsonResponse({'listing': _listingJson()}, 201);
       });

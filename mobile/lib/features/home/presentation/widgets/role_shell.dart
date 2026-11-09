@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/brand_title.dart';
+import '../../../cart/presentation/providers/cart_provider.dart';
+import '../../../cart/presentation/widgets/cart_tab_icon.dart';
 
 class RoleTab {
-  const RoleTab(this.label, this.icon);
+  const RoleTab(this.label, this.icon, {this.isCart = false});
 
   final String label;
   final IconData icon;
+  final bool isCart;
 }
 
 class RoleShell extends StatelessWidget {
@@ -17,6 +21,7 @@ class RoleShell extends StatelessWidget {
   static const List<RoleTab> customerTabs = [
     RoleTab('Home', Icons.home_outlined),
     RoleTab('Search', Icons.search),
+    RoleTab('Cart', Icons.shopping_cart_outlined, isCart: true),
     RoleTab('Orders', Icons.receipt_long_outlined),
     RoleTab('Profile', Icons.person_outline),
   ];
@@ -61,13 +66,21 @@ class RoleShell extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: NavigationBar(
               selectedIndex: shell.currentIndex,
-              onDestinationSelected: (index) => shell.goBranch(
-                index,
-                initialLocation: index == shell.currentIndex,
-              ),
+              onDestinationSelected: (index) {
+                if (tabs[index].isCart) context.read<CartProvider>().refresh();
+                shell.goBranch(
+                  index,
+                  initialLocation: index == shell.currentIndex,
+                );
+              },
               destinations: [
                 for (final tab in tabs)
-                  NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+                  NavigationDestination(
+                    icon: tab.isCart
+                        ? CartTabIcon(icon: tab.icon)
+                        : Icon(tab.icon),
+                    label: tab.label,
+                  ),
               ],
             ),
           ),

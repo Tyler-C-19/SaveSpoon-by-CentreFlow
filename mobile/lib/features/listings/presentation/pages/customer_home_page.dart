@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/auto_refresh.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
+import '../providers/listing_changes.dart';
 import '../widgets/listing_card.dart';
 import '../widgets/running_out_strip.dart';
 
@@ -17,7 +21,7 @@ class CustomerHomePage extends StatefulWidget {
   State<CustomerHomePage> createState() => _CustomerHomePageState();
 }
 
-class _CustomerHomePageState extends State<CustomerHomePage> {
+class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
   static const double _cardHeight = ListingCard.browseHeight;
   static const double _loadMoreDistance = 400;
   static const SliverGridDelegate _gridLayout =
@@ -29,6 +33,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
       );
 
   final ScrollController _scroll = ScrollController();
+  late final ListingChanges _changes;
 
   List<Listing>? _listings;
   List<Listing> _runningOut = const [];
@@ -43,11 +48,14 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _changes = context.read<ListingChanges>();
+    _changes.addListener(_load);
     _load();
   }
 
   @override
   void dispose() {
+    _changes.removeListener(_load);
     _scroll.dispose();
     super.dispose();
   }
@@ -67,7 +75,12 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
     }
   }
 
-  Future<void> _load() async {
+  @override
+  Future<void> autoRefresh() async {
+    if (_page == 1 && !_loadingMore) await _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
     final request = ++_requestId;
     final repository = context.read<ListingRepository>();
     final runningOut = _fetchRunningOut(repository);
@@ -88,11 +101,22 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
       if (!mounted || request != _requestId) return;
       if (_listings == null) {
         setState(() => _error = e.message);
-      } else {
+      } else if (!silent) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
+  }
+
+  Future<void> _open(Listing listing) async {
+    final message = await context.push<String>(
+      AppRoutes.foodDetailsFor(listing.id),
+    );
+    if (!mounted || message == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+    await _load();
   }
 
   void _retry() {
@@ -218,8 +242,11 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
         sliver: SliverGrid.builder(
           gridDelegate: _gridLayout,
           itemCount: listings.length,
-          itemBuilder: (context, index) =>
-              ListingCard(listing: listings[index], showBadges: true),
+          itemBuilder: (context, index) => ListingCard(
+            listing: listings[index],
+            showBadges: true,
+            onTap: () => _open(listings[index]),
+          ),
         ),
       ),
       SliverToBoxAdapter(
@@ -301,7 +328,9 @@ class _CustomerHomePageState extends State<CustomerHomePage> {
                   ),
                 ),
               ),
-              SliverToBoxAdapter(child: RunningOutStrip(listings: runningOut)),
+              SliverToBoxAdapter(
+                child: RunningOutStrip(listings: runningOut, onOpen: _open),
+              ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
             ],
             SliverPadding(

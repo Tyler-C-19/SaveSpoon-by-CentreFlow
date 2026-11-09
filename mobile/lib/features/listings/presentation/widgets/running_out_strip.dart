@@ -5,9 +5,10 @@ import '../../domain/listing.dart';
 import 'listing_card.dart';
 
 class RunningOutStrip extends StatelessWidget {
-  const RunningOutStrip({super.key, required this.listings});
+  const RunningOutStrip({super.key, required this.listings, this.onOpen});
 
   final List<Listing> listings;
+  final ValueChanged<Listing>? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +27,11 @@ class RunningOutStrip extends StatelessWidget {
                 const SizedBox(width: AppSpacing.sm),
             itemBuilder: (context, index) => SizedBox(
               width: cardWidth,
-              child: ListingCard(listing: listings[index], showBadges: true),
+              child: ListingCard(
+                listing: listings[index],
+                showBadges: true,
+                onTap: onOpen == null ? null : () => onOpen!(listings[index]),
+              ),
             ),
           );
         },

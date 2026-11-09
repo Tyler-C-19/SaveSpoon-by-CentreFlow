@@ -10,7 +10,11 @@ import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/google_auth_service.dart';
 import 'features/auth/data/token_storage.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/cart/data/cart_repository.dart';
+import 'features/cart/presentation/providers/cart_provider.dart';
 import 'features/listings/data/listing_repository.dart';
+import 'features/listings/presentation/providers/listing_changes.dart';
+import 'features/orders/data/order_repository.dart';
 import 'features/seller_profile/data/vendor_repository.dart';
 
 void main() {
@@ -36,6 +40,8 @@ class SaveSpoonApp extends StatefulWidget {
 class _SaveSpoonAppState extends State<SaveSpoonApp> {
   final AuthProvider _auth = AuthProvider();
   late final ApiClient _api;
+  final ListingChanges _listingChanges = ListingChanges();
+  late final CartProvider _cart;
   late final GoRouter _router;
 
   @override
@@ -47,6 +53,8 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
       tokenReader: storage.readToken,
       onUnauthorized: _auth.handleSessionExpired,
     );
+    _cart = CartProvider(CartRepository(_api));
+    _auth.addListener(_resetCartAfterLogout);
     _auth.attach(
       AuthRepository(api: _api, storage: storage),
       widget.googleAuth ?? PluginGoogleAuthService(),
@@ -55,8 +63,16 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
     _router = createAppRouter(_auth);
   }
 
+  void _resetCartAfterLogout() {
+    final signedOut = _auth.status != AuthStatus.authenticated;
+    if (signedOut && _cart.cart != null) _cart.reset();
+  }
+
   @override
   void dispose() {
+    _auth.removeListener(_resetCartAfterLogout);
+    _cart.dispose();
+    _listingChanges.dispose();
     _router.dispose();
     _auth.dispose();
     _api.close();
@@ -70,6 +86,9 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
         ChangeNotifierProvider<AuthProvider>.value(value: _auth),
         Provider<VendorRepository>(create: (_) => VendorRepository(_api)),
         Provider<ListingRepository>(create: (_) => ListingRepository(_api)),
+        Provider<OrderRepository>(create: (_) => OrderRepository(_api)),
+        ChangeNotifierProvider<CartProvider>.value(value: _cart),
+        ChangeNotifierProvider<ListingChanges>.value(value: _listingChanges),
       ],
       child: MaterialApp.router(
         title: 'SaveSpoon',

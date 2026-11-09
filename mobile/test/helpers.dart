@@ -62,6 +62,7 @@ Future<void> startApp(
   required FakeTokenStorage storage,
   required MockClientHandler onRequest,
   GoogleAuthService? googleAuth,
+  bool stubBrowse = true,
 }) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1;
@@ -72,9 +73,17 @@ Future<void> startApp(
       storage: storage,
       httpClient: MockClient((request) async {
         const browsePaths = {'/api/listings', '/api/listings/running-out'};
-        return request.method == 'GET' && browsePaths.contains(request.url.path)
-            ? jsonResponse({'listings': []})
-            : onRequest(request);
+        if (stubBrowse && request.method == 'GET') {
+          if (browsePaths.contains(request.url.path)) {
+            return jsonResponse({'listings': []});
+          }
+          if (request.url.path == '/api/cart') {
+            return jsonResponse({
+              'cart': {'items': [], 'total': 0, 'warnings': []},
+            });
+          }
+        }
+        return onRequest(request);
       }),
       googleAuth: googleAuth ?? FakeGoogleAuth(),
     ),
