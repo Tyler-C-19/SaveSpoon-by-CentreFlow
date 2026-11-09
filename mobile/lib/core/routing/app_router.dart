@@ -166,7 +166,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
         RoleShell(shell: shell, tabs: RoleShell.customerTabs),
       ),
       branches: [
-        _tab(AppRoutes.customerHome, const HomePage()),
+        _tab(AppRoutes.customerHome, const HomePage(showBrowse: true)),
         _tab(AppRoutes.customerSearch, const PlaceholderPage(title: 'Search')),
         _tab(AppRoutes.customerOrders, const PlaceholderPage(title: 'Orders')),
         _tab(AppRoutes.customerProfile, const ProfilePlaceholderPage()),

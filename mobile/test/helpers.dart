@@ -70,7 +70,12 @@ Future<void> startApp(
   await tester.pumpWidget(
     SaveSpoonApp(
       storage: storage,
-      httpClient: MockClient(onRequest),
+      httpClient: MockClient((request) async {
+        const browsePaths = {'/api/listings', '/api/listings/running-out'};
+        return request.method == 'GET' && browsePaths.contains(request.url.path)
+            ? jsonResponse({'listings': []})
+            : onRequest(request);
+      }),
       googleAuth: googleAuth ?? FakeGoogleAuth(),
     ),
   );
