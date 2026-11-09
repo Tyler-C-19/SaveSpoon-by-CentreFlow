@@ -77,12 +77,41 @@ function buildOtpEmail(name, code, purpose) {
   return { subject, text, html };
 }
 
-async function sendOtpEmail(to, name, code, purpose) {
-  await getTransporter().sendMail({
+const RESEND_URL = 'https://api.resend.com/emails';
+
+async function sendWithResend(to, content) {
+  const response = await fetch(RESEND_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM,
+      to: [to],
+      reply_to: process.env.EMAIL_REPLY_TO || undefined,
+      ...content,
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(`Resend returned ${response.status}${detail.message ? `: ${detail.message}` : ''}`);
+  }
+}
+
+// Resend when its key is set, otherwise Gmail.
+function send(to, content) {
+  if (process.env.RESEND_API_KEY) return sendWithResend(to, content);
+  return getTransporter().sendMail({
     from: `SaveSpoon <${process.env.EMAIL_USER}>`,
     to,
-    ...buildOtpEmail(name, code, purpose),
+    ...content,
   });
+}
+
+async function sendOtpEmail(to, name, code, purpose) {
+  await send(to, buildOtpEmail(name, code, purpose));
 }
 
 module.exports = { sendOtpEmail, buildOtpEmail };
