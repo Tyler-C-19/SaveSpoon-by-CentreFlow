@@ -55,13 +55,17 @@ class AuthProvider extends ChangeNotifier {
     if (!await repository.hasSession()) {
       return _setSignedOut();
     }
+    final cached = await repository.readCachedUser();
+    if (cached != null) _setSignedIn(cached);
     try {
-      _setSignedIn(await repository.fetchCurrentUser());
+      final user = await repository.fetchCurrentUser();
+      if (cached == null || _status == AuthStatus.authenticated) {
+        _setSignedIn(user);
+      }
     } on ApiException catch (e) {
       if (e.statusCode == 401) return _clearAndSignOut();
       // Keep the session when offline.
-      final cached = await repository.readCachedUser();
-      cached == null ? _setSignedOut() : _setSignedIn(cached);
+      if (cached == null) _setSignedOut();
     }
   }
 
@@ -90,6 +94,10 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void _setSignedIn(AuthUser user) {
+    if (!user.canUseMobileApp) {
+      _clearAndSignOut();
+      return;
+    }
     _user = user;
     _status = AuthStatus.authenticated;
     notifyListeners();

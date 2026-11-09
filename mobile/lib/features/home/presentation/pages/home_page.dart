@@ -11,30 +11,23 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const BrandTitle(),
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  'Welcome back, ${auth.user?.name ?? ''}',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text('Signed in as ${auth.user?.role ?? ''}'),
-                const SizedBox(height: AppSpacing.lg),
-                OutlinedButton(
-                  onPressed: auth.logout,
-                  child: const Text('Log out'),
-                ),
-              ],
-            ),
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const BrandTitle(),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Welcome back, ${auth.user?.name ?? ''}',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text('Signed in as ${auth.user?.role ?? ''}'),
+            ],
           ),
         ),
       ),

@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/data/auth_repository.dart';
@@ -10,6 +11,9 @@ import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/auth/presentation/pages/verify_email_page.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/home/presentation/pages/placeholder_page.dart';
+import '../../features/home/presentation/widgets/role_shell.dart';
+import '../theme/app_theme.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/';
@@ -19,21 +23,57 @@ abstract final class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String resetPassword = '/reset-password';
   static const String completeGoogle = '/complete-google';
-  static const String home = '/home';
+  static const String customerHome = '/customer/home';
+  static const String customerSearch = '/customer/search';
+  static const String customerOrders = '/customer/orders';
+  static const String customerProfile = '/customer/profile';
+  static const String vendorHome = '/vendor/home';
+  static const String vendorListings = '/vendor/listings';
+  static const String vendorOrders = '/vendor/orders';
+  static const String vendorProfile = '/vendor/profile';
+
+  static String homeFor(String? role) =>
+      role == 'vendor' ? vendorHome : customerHome;
 }
+
+String? resolveRedirect({
+  required String location,
+  required bool signedIn,
+  String? role,
+}) {
+  if (location == AppRoutes.splash) return null;
+
+  if (!signedIn) {
+    final inApp =
+        location.startsWith('/customer/') || location.startsWith('/vendor/');
+    return inApp ? AppRoutes.login : null;
+  }
+  return location.startsWith('/$role/') ? null : AppRoutes.homeFor(role);
+}
+
+StatefulShellBranch _tab(String path, Widget page) => StatefulShellBranch(
+  routes: [GoRoute(path: path, builder: (context, state) => page)],
+);
+
+Page<void> _fadeInPage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: const Duration(milliseconds: 300),
+      transitionsBuilder: (context, animation, secondary, child) => ColoredBox(
+        color: AppColors.page,
+        child: FadeTransition(opacity: animation, child: child),
+      ),
+      child: child,
+    );
 
 GoRouter createAppRouter(AuthProvider auth) => GoRouter(
   initialLocation: AppRoutes.splash,
   refreshListenable: auth,
-  redirect: (context, state) {
-    final location = state.matchedLocation;
-    if (location == AppRoutes.splash) return null;
-
-    final signedIn = auth.status == AuthStatus.authenticated;
-    if (signedIn && location != AppRoutes.home) return AppRoutes.home;
-    if (!signedIn && location == AppRoutes.home) return AppRoutes.login;
-    return null;
-  },
+  redirect: (context, state) => resolveRedirect(
+    location: state.matchedLocation,
+    signedIn: auth.status == AuthStatus.authenticated,
+    role: auth.user?.role,
+  ),
   routes: [
     GoRoute(
       path: AppRoutes.splash,
@@ -41,12 +81,15 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
     ),
     GoRoute(
       path: AppRoutes.login,
-      pageBuilder: (context, state) => CustomTransitionPage(
-        key: state.pageKey,
-        transitionDuration: Duration.zero,
-        transitionsBuilder: (context, animation, secondary, child) => child,
-        child: const LoginPage(),
-      ),
+      pageBuilder: (context, state) => state.extra == AppRoutes.splash
+          ? CustomTransitionPage(
+              key: state.pageKey,
+              transitionDuration: Duration.zero,
+              transitionsBuilder: (context, animation, secondary, child) =>
+                  child,
+              child: const LoginPage(sheetRises: false),
+            )
+          : _fadeInPage(state, const LoginPage()),
     ),
     GoRoute(
       path: AppRoutes.register,
@@ -71,9 +114,29 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       builder: (context, state) =>
           ResetPasswordPage(email: state.extra as String),
     ),
-    GoRoute(
-      path: AppRoutes.home,
-      builder: (context, state) => const HomePage(),
+    StatefulShellRoute.indexedStack(
+      pageBuilder: (context, state, shell) => _fadeInPage(
+        state,
+        RoleShell(shell: shell, tabs: RoleShell.customerTabs),
+      ),
+      branches: [
+        _tab(AppRoutes.customerHome, const HomePage()),
+        _tab(AppRoutes.customerSearch, const PlaceholderPage(title: 'Search')),
+        _tab(AppRoutes.customerOrders, const PlaceholderPage(title: 'Orders')),
+        _tab(AppRoutes.customerProfile, const ProfilePlaceholderPage()),
+      ],
+    ),
+    StatefulShellRoute.indexedStack(
+      pageBuilder: (context, state, shell) => _fadeInPage(
+        state,
+        RoleShell(shell: shell, tabs: RoleShell.vendorTabs),
+      ),
+      branches: [
+        _tab(AppRoutes.vendorHome, const HomePage()),
+        _tab(AppRoutes.vendorListings, const PlaceholderPage(title: 'Listings')),
+        _tab(AppRoutes.vendorOrders, const PlaceholderPage(title: 'Orders')),
+        _tab(AppRoutes.vendorProfile, const ProfilePlaceholderPage()),
+      ],
     ),
   ],
 );

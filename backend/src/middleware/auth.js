@@ -23,4 +23,16 @@ async function requireAuth(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth };
+function requireRole(...roles) {
+  return [
+    requireAuth,
+    (req, res, next) => {
+      if (!roles.includes(req.user.role)) {
+        return res.status(403).json({ error: "You don't have access to this." });
+      }
+      return next();
+    },
+  ];
+}
+
+module.exports = { requireAuth, requireRole };

@@ -30,6 +30,16 @@ function findWithOtp(email) {
   return User.findOne({ email }).select(OTP_FIELDS);
 }
 
+function sendSession(res, user, status = 200) {
+  if (user.role === 'admin') {
+    return res.status(403).json({
+      error: "Admin accounts can't use the mobile app. Use the admin dashboard.",
+      code: 'ADMIN_USE_DASHBOARD',
+    });
+  }
+  return res.status(status).json({ token: signToken(user.id), user });
+}
+
 async function register(req, res) {
   const invalid = registrationError(req.body);
   if (invalid) return res.status(400).json({ error: invalid });
@@ -76,7 +86,7 @@ async function verifyEmail(req, res) {
   otpService.clearCode(user);
   user.emailVerified = true;
   await user.save();
-  return res.json({ token: signToken(user.id), user });
+  return sendSession(res, user);
 }
 
 async function resendVerification(req, res) {
@@ -103,6 +113,8 @@ async function login(req, res) {
     return res.status(401).json({ error: BAD_LOGIN });
   }
 
+  if (user.role === 'admin') return sendSession(res, user);
+
   if (!user.emailVerified) {
     if (otpService.canSendNewCode(user)) await sendCode(user, 'verify_email');
     return res.status(403).json({
@@ -112,7 +124,7 @@ async function login(req, res) {
     });
   }
 
-  return res.json({ token: signToken(user.id), user });
+  return sendSession(res, user);
 }
 
 async function forgotPassword(req, res) {
@@ -162,6 +174,7 @@ async function findAndLinkGoogleUser(profile) {
   const email = normaliseEmail(profile.email);
   const user = await User.findOne({ googleId: profile.googleId }) ?? await User.findOne({ email }).select('+passwordHash');
   if (!user) return null;
+  if (user.role === 'admin') return user;
 
   if (user.googleId !== profile.googleId || !user.emailVerified) {
     // Unverified account: drop its password once Google confirms the email.
@@ -178,7 +191,7 @@ async function googleSignIn(req, res) {
   if (!profile) return res.status(401).json({ error: 'Google sign-in failed. Try again.' });
 
   const user = await findAndLinkGoogleUser(profile);
-  if (user) return res.json({ token: signToken(user.id), user });
+  if (user) return sendSession(res, user);
 
   return res.json({
     needsProfile: true,
@@ -195,7 +208,7 @@ async function completeGoogleSignUp(req, res) {
   if (!profile) return res.status(401).json({ error: 'Google sign-in failed. Try again.' });
 
   const existing = await findAndLinkGoogleUser(profile);
-  if (existing) return res.json({ token: signToken(existing.id), user: existing });
+  if (existing) return sendSession(res, existing);
 
   const email = normaliseEmail(profile.email);
   const user = new User({
@@ -214,7 +227,7 @@ async function completeGoogleSignUp(req, res) {
     }
     throw err;
   }
-  return res.status(201).json({ token: signToken(user.id), user });
+  return sendSession(res, user, 201);
 }
 
 function me(req, res) {
