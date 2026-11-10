@@ -276,6 +276,16 @@ void main() {
     expect(find.text('Listings'), findsNothing);
   });
 
+  testWidgets('the customer Search tab opens the search page', (tester) async {
+    await startAs(tester, 'customer');
+
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search for Surplus Food'), findsOneWidget);
+    expect(find.text('Coming soon'), findsNothing);
+  });
+
   testWidgets('a vendor sees the vendor tabs', (tester) async {
     await startAs(tester, 'vendor');
 
