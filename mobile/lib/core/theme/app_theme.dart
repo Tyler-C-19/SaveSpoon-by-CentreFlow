@@ -16,6 +16,24 @@ abstract final class AppColors {
 
   static const Color warningPale = Color(0xFFFFF4E0);
   static const Color onWarning = Color(0xFF7A4B00);
+
+  static const Color primarySoft = Color(0xFFCDE8D3);
+  static const Color lowStock = Color(0xFFB42318);
+  static const Color lowStockPale = Color(0xFFFEE4E2);
+  static const Color endingSoon = Color(0xFFB54708);
+  static const Color endingSoonPale = Color(0xFFFEF0C7);
+  static const Color unlisted = Color(0xFFEAECF0);
+  static const Color cardShadow = Color(0x1A101828);
+}
+
+abstract final class AppShadows {
+  static const List<BoxShadow> card = [
+    BoxShadow(
+      color: AppColors.cardShadow,
+      blurRadius: 14,
+      offset: Offset(0, 4),
+    ),
+  ];
 }
 
 abstract final class AppSpacing {

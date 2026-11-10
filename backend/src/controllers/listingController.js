@@ -4,10 +4,73 @@ const geminiService = require('../services/geminiService');
 const { descriptionError } = require('../validators/vendorValidators');
 const { listingError, titleError } = require('../validators/listingValidators');
 const { createUsageLimiter } = require('../services/usageLimiter');
-const { normaliseAllergens } = require('../models/listingOptions');
+const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
 
 const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
+
+const PAGE_SIZE = 20;
+const RUNNING_OUT_SIZE = 6;
+const PAGE_PATTERN = /^[1-9]\d{0,4}$/;
+
+function availablePipeline({ now, stock = { $gt: 0 }, sort, skip = 0, limit }) {
+  return [
+    { $match: { status: 'active', quantityAvailable: stock, pickupEnd: { $gt: now } } },
+    { $sort: sort },
+    { $lookup: { from: Vendor.collection.name, localField: 'vendor', foreignField: '_id', as: 'vendorProfile' } },
+    { $unwind: '$vendorProfile' },
+    { $skip: skip },
+    { $limit: limit },
+    {
+      $project: {
+        title: 1,
+        description: 1,
+        category: 1,
+        isHalal: 1,
+        originalPrice: 1,
+        discountedPrice: 1,
+        quantityAvailable: 1,
+        pickupStart: 1,
+        pickupEnd: 1,
+        allergens: 1,
+        otherAllergens: 1,
+        imageUrl: 1,
+        status: 1,
+        createdAt: 1,
+        stallName: '$vendorProfile.stallName',
+      },
+    },
+  ];
+}
+
+async function getAvailable(req, res) {
+  const { page = '1' } = req.query;
+  if (typeof page !== 'string' || !PAGE_PATTERN.test(page)) {
+    return res.status(400).json({ error: 'Page must be a whole number.' });
+  }
+
+  const found = await Listing.aggregate(
+    availablePipeline({
+      now: new Date(),
+      sort: { createdAt: -1, _id: -1 },
+      skip: (Number(page) - 1) * PAGE_SIZE,
+      limit: PAGE_SIZE + 1,
+    })
+  );
+  return res.json({ listings: found.slice(0, PAGE_SIZE), hasMore: found.length > PAGE_SIZE });
+}
+
+async function getRunningOut(req, res) {
+  const listings = await Listing.aggregate(
+    availablePipeline({
+      now: new Date(),
+      stock: { $gt: 0, $lte: LOW_STOCK_LIMIT },
+      sort: { quantityAvailable: 1, pickupEnd: 1, _id: 1 },
+      limit: RUNNING_OUT_SIZE,
+    })
+  );
+  return res.json({ listings });
+}
 
 async function createListing(req, res) {
   const invalid = listingError(req.body);
@@ -63,4 +126,4 @@ async function suggestAllergens(req, res) {
   }
 }
 
-module.exports = { createListing, getMine, suggestAllergens };
+module.exports = { createListing, getAvailable, getRunningOut, getMine, suggestAllergens };

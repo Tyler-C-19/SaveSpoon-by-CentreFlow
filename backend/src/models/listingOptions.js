@@ -15,6 +15,7 @@ const ALLERGENS = [
 
 const OTHER_ALLERGEN_PATTERN = /^\p{L}[\p{L} '-]{1,39}$/u;
 const MAX_OTHER_ALLERGENS = 5;
+const LOW_STOCK_LIMIT = 5;
 
 function titleCase(value) {
   return value
@@ -41,5 +42,6 @@ module.exports = {
   ALLERGENS,
   OTHER_ALLERGEN_PATTERN,
   MAX_OTHER_ALLERGENS,
+  LOW_STOCK_LIMIT,
   normaliseAllergens,
 };
