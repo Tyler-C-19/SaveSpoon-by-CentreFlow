@@ -14,6 +14,7 @@ app.use('/api/places', require('./routes/placesRoutes'));
 app.use('/api/listings', require('./routes/listingRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/cart', require('./routes/cartRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);

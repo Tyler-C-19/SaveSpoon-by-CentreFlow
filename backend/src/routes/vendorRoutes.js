@@ -8,5 +8,6 @@ router.use(requireRole('vendor'));
 router.get('/me', vendors.getMine);
 router.post('/me', vendors.createMine);
 router.patch('/me', vendors.updateMine);
+router.put('/me', vendors.replaceMine);
 
 module.exports = router;
