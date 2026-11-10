@@ -13,6 +13,9 @@ abstract final class AppColors {
   static const Color page = Color(0xFFFFFFFF);
   static const Color field = Color(0xFFF3F6F4);
   static const Color textMuted = Color(0xFF667085);
+
+  static const Color warningPale = Color(0xFFFFF4E0);
+  static const Color onWarning = Color(0xFF7A4B00);
 }
 
 abstract final class AppSpacing {
@@ -38,7 +41,7 @@ abstract final class AppTheme {
       surface: AppColors.page,
     );
 
-    final fieldShape = OutlineInputBorder(
+    final fieldShape = UnderlineInputBorder(
       borderRadius: BorderRadius.circular(AppRadius.lg),
       borderSide: BorderSide.none,
     );

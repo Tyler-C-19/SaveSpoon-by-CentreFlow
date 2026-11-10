@@ -638,7 +638,7 @@ void main() {
       await tester.pump();
       expect(find.textContaining('Add a description'), findsNothing);
 
-      await tester.tap(find.text('Listings'));
+      await tester.tap(find.text('Orders'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Home'));
       await tester.pumpAndSettle();

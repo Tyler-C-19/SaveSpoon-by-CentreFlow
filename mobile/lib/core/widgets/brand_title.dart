@@ -8,7 +8,7 @@ class BrandTitle extends StatelessWidget {
     final theme = Theme.of(context);
     return Text(
       'SaveSpoon',
-      style: theme.textTheme.displaySmall?.copyWith(
+      style: theme.textTheme.headlineMedium?.copyWith(
         color: theme.colorScheme.primary,
       ),
     );

@@ -13,6 +13,9 @@ import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/home/presentation/pages/placeholder_page.dart';
 import '../../features/home/presentation/widgets/role_shell.dart';
+import '../../features/listings/domain/listing.dart';
+import '../../features/listings/presentation/pages/add_listing_page.dart';
+import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/seller_profile/presentation/pages/vendor_setup_page.dart';
 import '../theme/app_theme.dart';
 
@@ -31,6 +34,7 @@ abstract final class AppRoutes {
   static const String vendorSetup = '/vendor/setup';
   static const String vendorHome = '/vendor/home';
   static const String vendorListings = '/vendor/listings';
+  static const String vendorAddListing = '/vendor/listings/new';
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
 
@@ -73,6 +77,26 @@ Page<void> _fadeInPage(GoRouterState state, Widget child) =>
       child: child,
     );
 
+Page<T> _slideInPage<T>(GoRouterState state, Widget child) =>
+    CustomTransitionPage<T>(
+      key: state.pageKey,
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionsBuilder: (context, animation, secondary, child) =>
+          SlideTransition(
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                ),
+            child: child,
+          ),
+      child: child,
+    );
+
 GoRouter createAppRouter(AuthProvider auth) => GoRouter(
   initialLocation: AppRoutes.splash,
   refreshListenable: auth,
@@ -101,31 +125,40 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
     ),
     GoRoute(
       path: AppRoutes.register,
-      builder: (context, state) => const RegisterPage(),
+      pageBuilder: (context, state) =>
+          _slideInPage(state, const RegisterPage()),
     ),
     GoRoute(
       path: AppRoutes.verifyEmail,
-      builder: (context, state) =>
-          VerifyEmailPage(email: state.extra as String),
+      pageBuilder: (context, state) =>
+          _slideInPage(state, VerifyEmailPage(email: state.extra as String)),
     ),
     GoRoute(
       path: AppRoutes.completeGoogle,
-      builder: (context, state) =>
-          CompleteGooglePage(profile: state.extra as GoogleProfile),
+      pageBuilder: (context, state) => _slideInPage(
+        state,
+        CompleteGooglePage(profile: state.extra as GoogleProfile),
+      ),
     ),
     GoRoute(
       path: AppRoutes.forgotPassword,
-      builder: (context, state) => const ForgotPasswordPage(),
+      pageBuilder: (context, state) =>
+          _slideInPage(state, const ForgotPasswordPage()),
     ),
     GoRoute(
       path: AppRoutes.resetPassword,
-      builder: (context, state) =>
-          ResetPasswordPage(email: state.extra as String),
+      pageBuilder: (context, state) =>
+          _slideInPage(state, ResetPasswordPage(email: state.extra as String)),
     ),
     GoRoute(
       path: AppRoutes.vendorSetup,
       pageBuilder: (context, state) =>
           _fadeInPage(state, const VendorSetupPage()),
+    ),
+    GoRoute(
+      path: AppRoutes.vendorAddListing,
+      pageBuilder: (context, state) =>
+          _slideInPage<Listing>(state, const AddListingPage()),
     ),
     StatefulShellRoute.indexedStack(
       pageBuilder: (context, state, shell) => _fadeInPage(
@@ -146,7 +179,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       ),
       branches: [
         _tab(AppRoutes.vendorHome, const HomePage()),
-        _tab(AppRoutes.vendorListings, const PlaceholderPage(title: 'Listings')),
+        _tab(AppRoutes.vendorListings, const VendorListingsPage()),
         _tab(AppRoutes.vendorOrders, const PlaceholderPage(title: 'Orders')),
         _tab(AppRoutes.vendorProfile, const ProfilePlaceholderPage()),
       ],

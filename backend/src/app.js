@@ -11,6 +11,7 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/vendors', require('./routes/vendorRoutes'));
 app.use('/api/places', require('./routes/placesRoutes'));
+app.use('/api/listings', require('./routes/listingRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);
