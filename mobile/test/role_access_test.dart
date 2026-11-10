@@ -14,7 +14,11 @@ import 'package:savespoon/main.dart';
 
 import 'helpers.dart';
 
-Map<String, dynamic> userWithRole(String role) => {...userJson, 'role': role};
+Map<String, dynamic> userWithRole(String role) => {
+  ...userJson,
+  'role': role,
+  'hasVendorProfile': true,
+};
 
 Future<void> startAs(
   WidgetTester tester,
@@ -23,7 +27,10 @@ Future<void> startAs(
 }) => startApp(
   tester,
   storage: storage ?? FakeTokenStorage(token: 'saved'),
-  onRequest: (_) async => jsonResponse({'user': userWithRole(role)}),
+  onRequest: (_) async => jsonResponse({
+    'user': userWithRole(role),
+    'vendor': {'description': 'Rice'},
+  }),
 );
 
 void main() {

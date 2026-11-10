@@ -12,6 +12,8 @@ const vendorSchema = new mongoose.Schema(
       type: { type: String, enum: ['Point'], default: 'Point' },
       coordinates: { type: [Number], required: true },
     },
+    // Set when the pin came from a Google place. Empty when the vendor placed it.
+    placeId: { type: String, trim: true },
     verified: { type: Boolean, default: false },
   },
   { timestamps: true }

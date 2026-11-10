@@ -43,6 +43,11 @@ class ApiClient {
         _client.post(_uri(path), headers: headers, body: jsonEncode(body)),
   );
 
+  Future<dynamic> patch(String path, {Map<String, dynamic>? body}) => _send(
+    (headers) =>
+        _client.patch(_uri(path), headers: headers, body: jsonEncode(body)),
+  );
+
   void close() => _client.close();
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');

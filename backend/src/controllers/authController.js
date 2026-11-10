@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const Vendor = require('../models/Vendor');
 const otpService = require('../services/otpService');
 const emailService = require('../services/emailService');
 const googleService = require('../services/googleService');
@@ -30,14 +31,22 @@ function findWithOtp(email) {
   return User.findOne({ email }).select(OTP_FIELDS);
 }
 
-function sendSession(res, user, status = 200) {
+async function withVendorStatus(user) {
+  const json = user.toJSON();
+  if (user.role === 'vendor') {
+    json.hasVendorProfile = Boolean(await Vendor.exists({ user: user._id }));
+  }
+  return json;
+}
+
+async function sendSession(res, user, status = 200) {
   if (user.role === 'admin') {
     return res.status(403).json({
       error: "Admin accounts can't use the mobile app. Use the admin dashboard.",
       code: 'ADMIN_USE_DASHBOARD',
     });
   }
-  return res.status(status).json({ token: signToken(user.id), user });
+  return res.status(status).json({ token: signToken(user.id), user: await withVendorStatus(user) });
 }
 
 async function register(req, res) {
@@ -230,8 +239,8 @@ async function completeGoogleSignUp(req, res) {
   return sendSession(res, user, 201);
 }
 
-function me(req, res) {
-  res.json({ user: req.user });
+async function me(req, res) {
+  res.json({ user: await withVendorStatus(req.user) });
 }
 
 module.exports = {

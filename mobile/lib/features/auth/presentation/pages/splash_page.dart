@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../seller_profile/data/map_warmup.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/brand_header.dart';
 import 'login_page.dart';
@@ -93,10 +94,13 @@ class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
     }
   }
 
-  void _goHome() {
+  Future<void> _goHome() async {
     _leaving = true;
     _controller.stop();
-    final home = AppRoutes.homeFor(_auth.user!.role);
+    final user = _auth.user!;
+    final home = AppRoutes.homeFor(user.role);
+    if (user.needsVendorSetup) await warmUpMaps();
+    if (!mounted) return;
     if (_animationsOff) return context.go(home);
     _fadeOut.forward().whenComplete(() {
       if (mounted) context.go(home);

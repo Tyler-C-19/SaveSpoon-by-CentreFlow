@@ -13,6 +13,7 @@ class AppTextField extends StatefulWidget {
     this.isPassword = false,
     this.autofillHints,
     this.textInputAction = TextInputAction.next,
+    this.maxLines = 1,
   });
 
   final String label;
@@ -25,6 +26,7 @@ class AppTextField extends StatefulWidget {
   final bool isPassword;
   final Iterable<String>? autofillHints;
   final TextInputAction textInputAction;
+  final int maxLines;
 
   @override
   State<AppTextField> createState() => _AppTextFieldState();
@@ -42,6 +44,7 @@ class _AppTextFieldState extends State<AppTextField> {
       obscureText: widget.isPassword && _obscured,
       autofillHints: widget.autofillHints,
       textInputAction: widget.textInputAction,
+      maxLines: widget.maxLines,
       autocorrect: !widget.isPassword,
       enableSuggestions: !widget.isPassword,
       decoration: InputDecoration(
