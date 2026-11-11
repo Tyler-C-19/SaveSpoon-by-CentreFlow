@@ -19,6 +19,7 @@ import '../../features/home/presentation/widgets/role_shell.dart';
 import '../../features/listings/domain/listing.dart';
 import '../../features/listings/presentation/pages/add_listing_page.dart';
 import '../../features/listings/presentation/pages/food_details_page.dart';
+import '../../features/listings/presentation/pages/search_page.dart';
 import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/listings/presentation/providers/listing_changes.dart';
 import '../../features/orders/domain/order.dart';
@@ -213,7 +214,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       ),
       branches: [
         _tab(AppRoutes.customerHome, const HomePage(showBrowse: true)),
-        _tab(AppRoutes.customerSearch, const PlaceholderPage(title: 'Search')),
+        _tab(AppRoutes.customerSearch, const SearchPage()),
         _tab(
           AppRoutes.customerCart,
           const CartPage(onOrdered: _openConfirmation),

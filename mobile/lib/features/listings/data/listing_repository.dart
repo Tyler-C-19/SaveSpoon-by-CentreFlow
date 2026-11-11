@@ -18,6 +18,18 @@ class ListingPage {
   final bool hasMore;
 }
 
+class SearchResults {
+  const SearchResults({
+    required this.listings,
+    required this.hasMore,
+    this.otherStalls = const [],
+  });
+
+  final List<Listing> listings;
+  final bool hasMore;
+  final List<Listing> otherStalls;
+}
+
 class ListingRepository {
   ListingRepository(this.api);
 
@@ -38,6 +50,16 @@ class ListingRepository {
 
   Future<List<Listing>> fetchRunningOut() async =>
       _parseListings(await api.get('/api/listings/running-out'));
+
+  Future<SearchResults> search(String query, {int page = 1}) async {
+    final keyword = Uri.encodeQueryComponent(query);
+    final data = await api.get('/api/listings/search?q=$keyword&page=$page');
+    return SearchResults(
+      listings: _parseListings(data),
+      hasMore: data['hasMore'] as bool? ?? false,
+      otherStalls: _parseListings({'listings': data['otherStalls']}),
+    );
+  }
 
   Future<Listing> fetchDetails(String id) async {
     final data = await api.get('/api/listings/$id');
