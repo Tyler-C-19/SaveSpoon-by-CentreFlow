@@ -48,8 +48,35 @@ class ApiClient {
         _client.patch(_uri(path), headers: headers, body: jsonEncode(body)),
   );
 
-  Future<dynamic> delete(String path) =>
-      _send((headers) => _client.delete(_uri(path), headers: headers));
+  Future<dynamic> put(String path, {Map<String, dynamic>? body}) => _send(
+    (headers) =>
+        _client.put(_uri(path), headers: headers, body: jsonEncode(body)),
+  );
+
+  Future<dynamic> delete(String path, {Map<String, dynamic>? body}) => _send(
+    (headers) => _client.delete(
+      _uri(path),
+      headers: headers,
+      body: body == null ? null : jsonEncode(body),
+    ),
+  );
+
+  // Sends one file as multipart form data.
+  Future<dynamic> putFile(
+    String path, {
+    required String field,
+    required List<int> bytes,
+    required String filename,
+    Map<String, String> fields = const {},
+  }) => _send((headers) async {
+    final request = http.MultipartRequest('PUT', _uri(path))
+      ..headers.addAll(headers..remove('Content-Type'))
+      ..fields.addAll(fields)
+      ..files.add(
+        http.MultipartFile.fromBytes(field, bytes, filename: filename),
+      );
+    return http.Response.fromStream(await _client.send(request));
+  });
 
   void close() => _client.close();
 

@@ -15,6 +15,7 @@ import 'features/cart/presentation/providers/cart_provider.dart';
 import 'features/listings/data/listing_repository.dart';
 import 'features/listings/presentation/providers/listing_changes.dart';
 import 'features/orders/data/order_repository.dart';
+import 'features/profile/data/profile_repository.dart';
 import 'features/seller_profile/data/vendor_repository.dart';
 
 void main() {
@@ -87,6 +88,7 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
         Provider<VendorRepository>(create: (_) => VendorRepository(_api)),
         Provider<ListingRepository>(create: (_) => ListingRepository(_api)),
         Provider<OrderRepository>(create: (_) => OrderRepository(_api)),
+        Provider<ProfileRepository>(create: (_) => ProfileRepository(_api)),
         ChangeNotifierProvider<CartProvider>.value(value: _cart),
         ChangeNotifierProvider<ListingChanges>.value(value: _listingChanges),
       ],
