@@ -25,9 +25,11 @@ abstract final class ListingOptions {
   static const int lowStockLimit = 5;
   static const Duration endingSoonWindow = Duration(hours: 1);
   static const Duration newWindow = Duration(hours: 1);
+  static const int sellingFastMinSold = 3;
+  static const double sellingFastMinShare = 0.3;
 }
 
-enum ListingBadge { lowStock, endingSoon, isNew }
+enum ListingBadge { lowStock, sellingFast, endingSoon, isNew }
 
 String allergenLabel(String value) =>
     '${value[0].toUpperCase()}${value.substring(1)}';
@@ -51,6 +53,8 @@ class Listing {
     this.isHalal,
     this.stallName,
     this.createdAt,
+    this.soldCount = 0,
+    this.pickupAddress,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) => Listing(
@@ -74,6 +78,8 @@ class Listing {
     createdAt: json['createdAt'] == null
         ? null
         : DateTime.parse(json['createdAt'] as String).toLocal(),
+    soldCount: json['soldCount'] as int? ?? 0,
+    pickupAddress: json['pickupAddress'] as String?,
   );
 
   final String id;
@@ -91,6 +97,8 @@ class Listing {
   final String status;
   final String? stallName;
   final DateTime? createdAt;
+  final int soldCount;
+  final String? pickupAddress;
 
   int get savePercent =>
       ((originalPrice - discountedPrice) / originalPrice * 100).round();
@@ -98,6 +106,7 @@ class Listing {
   ListingBadge? badgeAt(DateTime time) {
     if (!isAvailableAt(time)) return null;
     if (isLowStock) return ListingBadge.lowStock;
+    if (isSellingFast) return ListingBadge.sellingFast;
     if (pickupEnd.difference(time) <= ListingOptions.endingSoonWindow) {
       return ListingBadge.endingSoon;
     }
@@ -124,6 +133,20 @@ class Listing {
   bool get isLowStock =>
       quantityAvailable > 0 &&
       quantityAvailable <= ListingOptions.lowStockLimit;
+
+  bool get isSellingFast =>
+      quantityAvailable > ListingOptions.lowStockLimit &&
+      soldCount >= ListingOptions.sellingFastMinSold &&
+      soldCount / (soldCount + quantityAvailable) >=
+          ListingOptions.sellingFastMinShare;
+
+  String unavailableMessageAt(DateTime time) {
+    if (!pickupEnd.isAfter(time)) return 'Pickup for $title has ended.';
+    if (quantityAvailable <= 0 || status == 'sold_out') {
+      return 'Sorry, $title has just sold out.';
+    }
+    return 'This item is no longer available.';
+  }
 
   String get lowStockLabel => 'Only $quantityAvailable left!';
 

@@ -1,5 +1,6 @@
 const Listing = require('../models/Listing');
 const Vendor = require('../models/Vendor');
+const { findLiveListing, unavailableProblem, GONE, LISTING_GONE } = require('../services/orderService');
 const geminiService = require('../services/geminiService');
 const { descriptionError } = require('../validators/vendorValidators');
 const { listingError, titleError } = require('../validators/listingValidators');
@@ -30,6 +31,7 @@ function availablePipeline({ now, stock = { $gt: 0 }, sort, skip = 0, limit }) {
         originalPrice: 1,
         discountedPrice: 1,
         quantityAvailable: 1,
+        soldCount: 1,
         pickupStart: 1,
         pickupEnd: 1,
         allergens: 1,
@@ -70,6 +72,19 @@ async function getRunningOut(req, res) {
     })
   );
   return res.json({ listings });
+}
+
+async function getDetails(req, res) {
+  const { listing, vendor } = await findLiveListing(req.params.id);
+  if (!listing || unavailableProblem(listing)?.code === LISTING_GONE) {
+    const { status, ...problem } = GONE;
+    return res.status(status).json(problem);
+  }
+
+  const { vendor: vendorId, location, ...details } = listing.toObject();
+  return res.json({
+    listing: { ...details, stallName: vendor.stallName, pickupAddress: vendor.address },
+  });
 }
 
 async function createListing(req, res) {
@@ -126,4 +141,4 @@ async function suggestAllergens(req, res) {
   }
 }
 
-module.exports = { createListing, getAvailable, getRunningOut, getMine, suggestAllergens };
+module.exports = { createListing, getAvailable, getRunningOut, getDetails, getMine, suggestAllergens };

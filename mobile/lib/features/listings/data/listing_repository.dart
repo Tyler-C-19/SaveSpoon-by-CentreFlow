@@ -39,6 +39,11 @@ class ListingRepository {
   Future<List<Listing>> fetchRunningOut() async =>
       _parseListings(await api.get('/api/listings/running-out'));
 
+  Future<Listing> fetchDetails(String id) async {
+    final data = await api.get('/api/listings/$id');
+    return Listing.fromJson(data['listing'] as Map<String, dynamic>);
+  }
+
   Future<Listing> create({
     required String title,
     required String description,

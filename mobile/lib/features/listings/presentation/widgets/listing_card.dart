@@ -4,18 +4,20 @@ import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
 import 'category_picker.dart';
 
-String pickupLabel(BuildContext context, Listing listing) {
+String pickupLabel(BuildContext context, Listing listing) =>
+    pickupRangeLabel(context, listing.pickupStart, listing.pickupEnd);
+
+String pickupRangeLabel(BuildContext context, DateTime start, DateTime end) {
   final localizations = MaterialLocalizations.of(context);
   String time(DateTime value) =>
       localizations.formatTimeOfDay(TimeOfDay.fromDateTime(value));
   final now = DateTime.now();
-  final start = listing.pickupStart;
   final isToday =
       start.year == now.year &&
       start.month == now.month &&
       start.day == now.day;
   final day = isToday ? 'Today' : localizations.formatShortMonthDay(start);
-  return '$day, ${time(start)} - ${time(listing.pickupEnd)}';
+  return '$day, ${time(start)} - ${time(end)}';
 }
 
 class ListingCard extends StatelessWidget {
@@ -23,12 +25,14 @@ class ListingCard extends StatelessWidget {
     super.key,
     required this.listing,
     this.showBadges = false,
+    this.onTap,
   });
 
   static const double browseHeight = 250;
 
   final Listing listing;
   final bool showBadges;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +86,7 @@ class ListingCard extends StatelessWidget {
                     Positioned(
                       top: AppSpacing.sm,
                       left: 0,
-                      child: _BadgeRibbon(badge: badge, listing: listing),
+                      child: ListingRibbon(badge: badge, listing: listing),
                     ),
                   if (unlisted == null && listing.isHalal == false)
                     Positioned(
@@ -94,10 +98,7 @@ class ListingCard extends StatelessWidget {
                     Positioned(
                       bottom: AppSpacing.sm,
                       right: AppSpacing.sm,
-                      child: _Pill(
-                        text: 'Save ${listing.savePercent}%',
-                        color: AppColors.onWarning,
-                      ),
+                      child: SavePill(listing: listing),
                     ),
                 ],
               ),
@@ -169,7 +170,23 @@ class ListingCard extends StatelessWidget {
       ),
     );
 
-    if (unlisted == null) return card;
+    if (unlisted == null) {
+      if (onTap == null) return card;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          card,
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: ValueKey('listing-card-${listing.id}'),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              onTap: onTap,
+            ),
+          ),
+        ],
+      );
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -217,8 +234,8 @@ class _InfoLine extends StatelessWidget {
   }
 }
 
-class _BadgeRibbon extends StatelessWidget {
-  const _BadgeRibbon({required this.badge, required this.listing});
+class ListingRibbon extends StatelessWidget {
+  const ListingRibbon({super.key, required this.badge, required this.listing});
 
   final ListingBadge badge;
   final Listing listing;
@@ -230,6 +247,11 @@ class _BadgeRibbon extends StatelessWidget {
         text: listing.lowStockLabel,
         color: AppColors.lowStock,
         fill: AppColors.lowStockPale,
+      ),
+      ListingBadge.sellingFast => const _Ribbon(
+        text: 'Selling Fast',
+        color: AppColors.sellingFast,
+        fill: AppColors.sellingFastPale,
       ),
       ListingBadge.endingSoon => const _Ribbon(
         text: 'Ending Soon',
@@ -275,6 +297,16 @@ class _Ribbon extends StatelessWidget {
       ),
     );
   }
+}
+
+class SavePill extends StatelessWidget {
+  const SavePill({super.key, required this.listing});
+
+  final Listing listing;
+
+  @override
+  Widget build(BuildContext context) =>
+      _Pill(text: 'Save ${listing.savePercent}%', color: AppColors.onWarning);
 }
 
 class _Pill extends StatelessWidget {

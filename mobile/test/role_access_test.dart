@@ -84,7 +84,13 @@ void main() {
       await tester.pumpWidget(
         SaveSpoonApp(
           storage: storage,
-          httpClient: MockClient((_) => me()),
+          httpClient: MockClient(
+            (request) async => request.url.path == '/api/cart'
+                ? jsonResponse({
+                    'cart': {'items': [], 'total': 0, 'warnings': []},
+                  })
+                : me(),
+          ),
           googleAuth: FakeGoogleAuth(),
         ),
       );
@@ -266,8 +272,8 @@ void main() {
 
     expect(find.byType(HomePage), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Cart'), findsOneWidget);
     expect(find.text('Listings'), findsNothing);
-    expect(find.text('Cart'), findsNothing);
   });
 
   testWidgets('a vendor sees the vendor tabs', (tester) async {
@@ -276,6 +282,7 @@ void main() {
     expect(find.byType(HomePage), findsOneWidget);
     expect(find.text('Listings'), findsOneWidget);
     expect(find.text('Search'), findsNothing);
+    expect(find.text('Cart'), findsNothing);
   });
 
   testWidgets('the bottom bar floats clear of the screen edges', (

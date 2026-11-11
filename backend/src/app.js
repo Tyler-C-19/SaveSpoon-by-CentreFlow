@@ -12,6 +12,8 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/vendors', require('./routes/vendorRoutes'));
 app.use('/api/places', require('./routes/placesRoutes'));
 app.use('/api/listings', require('./routes/listingRoutes'));
+app.use('/api/orders', require('./routes/orderRoutes'));
+app.use('/api/cart', require('./routes/cartRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);

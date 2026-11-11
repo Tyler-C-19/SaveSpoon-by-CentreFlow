@@ -19,13 +19,13 @@ function sampleListings([stall1, stall2, stall3]) {
     make(stall2, {
       title: 'Mee Goreng Mamak', description: 'Spicy fried noodles with egg',
       category: 'Noodles', isHalal: true,
-      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 8,
+      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 8, soldCount: 4,
       pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'egg', 'soy'],
     }),
     make(stall2, {
       title: 'Roti Canai (2 pcs) with Dhal', description: 'Fresh roti canai with dhal',
       category: 'Snacks', isHalal: true,
-      originalPrice: 3.5, discountedPrice: 2, quantityAvailable: 10,
+      originalPrice: 3.5, discountedPrice: 2, quantityAvailable: 10, soldCount: 1,
       pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'milk'],
     }),
     make(stall3, {
@@ -37,7 +37,7 @@ function sampleListings([stall1, stall2, stall3]) {
     make(stall3, {
       title: 'Assorted Kuih Box', description: 'Box of 6 mixed kuih',
       category: 'Desserts', isHalal: true,
-      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 0,
+      originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 0, soldCount: 3,
       pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['coconut', 'gluten'], status: 'sold_out',
     }),
   ];

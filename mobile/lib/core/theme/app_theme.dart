@@ -20,6 +20,8 @@ abstract final class AppColors {
   static const Color primarySoft = Color(0xFFCDE8D3);
   static const Color lowStock = Color(0xFFB42318);
   static const Color lowStockPale = Color(0xFFFEE4E2);
+  static const Color sellingFast = Color(0xFFC4320A);
+  static const Color sellingFastPale = Color(0xFFFFE6D5);
   static const Color endingSoon = Color(0xFFB54708);
   static const Color endingSoonPale = Color(0xFFFEF0C7);
   static const Color unlisted = Color(0xFFEAECF0);

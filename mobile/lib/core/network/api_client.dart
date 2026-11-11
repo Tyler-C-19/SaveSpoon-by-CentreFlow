@@ -48,6 +48,9 @@ class ApiClient {
         _client.patch(_uri(path), headers: headers, body: jsonEncode(body)),
   );
 
+  Future<dynamic> delete(String path) =>
+      _send((headers) => _client.delete(_uri(path), headers: headers));
+
   void close() => _client.close();
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');

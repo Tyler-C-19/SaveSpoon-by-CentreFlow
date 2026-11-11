@@ -8,6 +8,7 @@ import 'package:savespoon/core/theme/app_theme.dart';
 import 'package:savespoon/features/listings/data/listing_repository.dart';
 import 'package:savespoon/features/listings/domain/listing.dart';
 import 'package:savespoon/features/listings/presentation/pages/customer_home_page.dart';
+import 'package:savespoon/features/listings/presentation/providers/listing_changes.dart';
 import 'package:savespoon/features/listings/presentation/widgets/listing_card.dart';
 import 'package:savespoon/features/listings/presentation/widgets/running_out_strip.dart';
 
@@ -49,9 +50,14 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    Provider<ListingRepository>(
-      create: (_) =>
-          ListingRepository(ApiClient(client: MockClient(onRequest))),
+    MultiProvider(
+      providers: [
+        Provider<ListingRepository>(
+          create: (_) =>
+              ListingRepository(ApiClient(client: MockClient(onRequest))),
+        ),
+        ChangeNotifierProvider<ListingChanges>(create: (_) => ListingChanges()),
+      ],
       child: MaterialApp(
         theme: AppTheme.light,
         home: const Scaffold(body: CustomerHomePage(name: 'Aina')),
@@ -100,9 +106,16 @@ void main() {
 
   testWidgets('a long name moves to the next line whole', (tester) async {
     Future<void> pumpName(String name, double width) => tester.pumpWidget(
-      Provider<ListingRepository>(
-        create: (_) =>
-            ListingRepository(ApiClient(client: MockClient(_server()))),
+      MultiProvider(
+        providers: [
+          Provider<ListingRepository>(
+            create: (_) =>
+                ListingRepository(ApiClient(client: MockClient(_server()))),
+          ),
+          ChangeNotifierProvider<ListingChanges>(
+            create: (_) => ListingChanges(),
+          ),
+        ],
         child: MaterialApp(
           theme: AppTheme.light,
           home: Scaffold(

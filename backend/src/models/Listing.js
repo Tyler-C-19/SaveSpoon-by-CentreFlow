@@ -11,6 +11,7 @@ const listingSchema = new mongoose.Schema(
     originalPrice: { type: Number, required: true, min: 0 },
     discountedPrice: { type: Number, required: true, min: 0 },
     quantityAvailable: { type: Number, required: true, min: 0 },
+    soldCount: { type: Number, default: 0, min: 0 },
     pickupStart: { type: Date, required: true },
     pickupEnd: { type: Date, required: true },
     allergens: { type: [{ type: String, enum: ALLERGENS }], default: [] },
