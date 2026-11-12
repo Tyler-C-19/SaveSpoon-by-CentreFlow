@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 
 class PlaceholderPage extends StatelessWidget {
   const PlaceholderPage({super.key, required this.title, this.action});
@@ -29,21 +27,6 @@ class PlaceholderPage extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class ProfilePlaceholderPage extends StatelessWidget {
-  const ProfilePlaceholderPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return PlaceholderPage(
-      title: 'Profile',
-      action: OutlinedButton(
-        onPressed: context.read<AuthProvider>().logout,
-        child: const Text('Log out'),
       ),
     );
   }

@@ -395,7 +395,7 @@ void main() {
     );
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tapButton(tester, 'Log out');
+    await tapButton(tester, 'Log Out');
     expect(google.signOuts, 1);
   });
 
@@ -447,7 +447,7 @@ void main() {
     );
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tapButton(tester, 'Log out');
+    await tapButton(tester, 'Log Out');
     expect(find.byType(LoginPage), findsOneWidget);
     expect(storage.token, isNull);
   });

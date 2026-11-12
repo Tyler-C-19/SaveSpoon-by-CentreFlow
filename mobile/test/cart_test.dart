@@ -614,7 +614,7 @@ void main() {
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Log out'));
+      await tester.tap(find.text('Log Out'));
       await tester.pumpAndSettle();
 
       expect(cart.count, 0);

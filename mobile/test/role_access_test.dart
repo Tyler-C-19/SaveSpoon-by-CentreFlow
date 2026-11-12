@@ -195,7 +195,7 @@ void main() {
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Log out'));
+      await tester.tap(find.text('Log Out'));
       await tester.pumpAndSettle();
       expect(find.byType(LoginPage), findsOneWidget);
 
@@ -209,7 +209,7 @@ void main() {
     await startAs(tester, 'customer');
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Log out'));
+    await tester.tap(find.text('Log Out'));
 
     for (var i = 0; i < 10 && find.byType(LoginPage).evaluate().isEmpty; i++) {
       await tester.pump();
