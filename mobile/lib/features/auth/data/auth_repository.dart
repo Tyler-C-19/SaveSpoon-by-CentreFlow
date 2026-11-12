@@ -132,6 +132,13 @@ class AuthRepository {
 
   Future<void> clearSession() => storage.clear();
 
+  // Keeps this phone logged in after a password change.
+  Future<void> replaceToken(String token) async {
+    final userJson = await storage.readUserJson();
+    if (userJson == null) return;
+    await storage.save(token: token, userJson: userJson);
+  }
+
   Future<AuthUser> _saveSession(Map<String, dynamic> data) async {
     final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
     await storage.save(

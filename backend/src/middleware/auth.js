@@ -15,7 +15,8 @@ async function requireAuth(req, res, next) {
   }
 
   const user = await User.findById(payload.sub);
-  if (!user) {
+  const changedAt = user?.passwordChangedAt ? Math.floor(user.passwordChangedAt.getTime() / 1000) : 0;
+  if (!user || payload.iat < changedAt) {
     return res.status(401).json({ error: 'Your session has expired. Log in again.' });
   }
 

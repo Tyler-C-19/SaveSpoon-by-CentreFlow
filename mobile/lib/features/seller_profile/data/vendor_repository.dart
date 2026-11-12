@@ -32,6 +32,29 @@ class VendorRepository {
     },
   );
 
+  // Returns how many listings had their location updated.
+  Future<int> updateProfile({
+    required String businessName,
+    required String phone,
+    required String address,
+    required String description,
+    required GeoPoint pin,
+    String? placeId,
+  }) async {
+    final data = await api.put(
+      '/api/vendors/me',
+      body: {
+        'stallName': businessName,
+        'phone': phone,
+        'address': address,
+        'description': description,
+        'location': pin.toGeoJson(),
+        'placeId': ?placeId,
+      },
+    );
+    return data['listingsUpdated'] as int? ?? 0;
+  }
+
   Future<String> fetchDescription() async {
     final data = await api.get('/api/vendors/me');
     return data['vendor']['description'] as String? ?? '';

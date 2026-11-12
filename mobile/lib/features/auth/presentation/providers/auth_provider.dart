@@ -81,6 +81,13 @@ class AuthProvider extends ChangeNotifier {
     _setSignedIn(updated);
   }
 
+  Future<void> updateUser(AuthUser user) async {
+    await repository.cacheUser(user);
+    _setSignedIn(user);
+  }
+
+  Future<void> replaceToken(String token) => repository.replaceToken(token);
+
   Future<void> logout() async {
     await _clearAndSignOut();
     try {

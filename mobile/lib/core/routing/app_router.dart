@@ -24,6 +24,12 @@ import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/listings/presentation/providers/listing_changes.dart';
 import '../../features/orders/domain/order.dart';
 import '../../features/orders/presentation/pages/order_confirmation_page.dart';
+import '../../features/profile/domain/user_profile.dart';
+import '../../features/profile/presentation/pages/change_password_page.dart';
+import '../../features/profile/presentation/pages/edit_details_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/widgets/location_change_dialog.dart';
+import '../../features/seller_profile/domain/vendor_profile.dart';
 import '../../features/seller_profile/presentation/pages/vendor_setup_page.dart';
 import '../theme/app_theme.dart';
 
@@ -48,6 +54,10 @@ abstract final class AppRoutes {
   static const String vendorAddListing = '/vendor/listings/new';
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
+  static const String vendorBusinessEdit = '/vendor/profile/business';
+
+  static String profileEditFor(String role) => '/$role/profile/edit';
+  static String profilePasswordFor(String role) => '/$role/profile/password';
 
   static String foodDetailsFor(String id) => '/customer/food/$id';
 
@@ -186,6 +196,28 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       pageBuilder: (context, state) =>
           _slideInPage<Listing>(state, const AddListingPage()),
     ),
+    for (final role in ['customer', 'vendor']) ...[
+      GoRoute(
+        path: AppRoutes.profileEditFor(role),
+        pageBuilder: (context, state) =>
+            _slideInPage<ProfileChange>(state, const EditDetailsPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.profilePasswordFor(role),
+        pageBuilder: (context, state) =>
+            _slideInPage<String>(state, const ChangePasswordPage()),
+      ),
+    ],
+    GoRoute(
+      path: AppRoutes.vendorBusinessEdit,
+      pageBuilder: (context, state) => _slideInPage<String>(
+        state,
+        VendorSetupPage(
+          initial: state.extra as VendorProfile,
+          confirmLocationChange: confirmLocationChange,
+        ),
+      ),
+    ),
     GoRoute(
       path: AppRoutes.foodDetails,
       pageBuilder: (context, state) => _slideInPage<String>(
@@ -220,7 +252,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
           const CartPage(onOrdered: _openConfirmation),
         ),
         _tab(AppRoutes.customerOrders, const PlaceholderPage(title: 'Orders')),
-        _tab(AppRoutes.customerProfile, const ProfilePlaceholderPage()),
+        _tab(AppRoutes.customerProfile, const ProfilePage()),
       ],
     ),
     StatefulShellRoute.indexedStack(
@@ -232,7 +264,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
         _tab(AppRoutes.vendorHome, const HomePage()),
         _tab(AppRoutes.vendorListings, const VendorListingsPage()),
         _tab(AppRoutes.vendorOrders, const PlaceholderPage(title: 'Orders')),
-        _tab(AppRoutes.vendorProfile, const ProfilePlaceholderPage()),
+        _tab(AppRoutes.vendorProfile, const ProfilePage()),
       ],
     ),
   ],

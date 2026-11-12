@@ -11,6 +11,7 @@ import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/location_service.dart';
 import '../../data/vendor_repository.dart';
 import '../../domain/geo_point.dart';
+import '../../domain/vendor_profile.dart';
 import '../../domain/vendor_validators.dart';
 import '../widgets/pickup_map.dart';
 import '../widgets/place_search_field.dart';
@@ -20,10 +21,18 @@ class VendorSetupPage extends StatefulWidget {
     super.key,
     this.mapBuilder = googlePickupMap,
     this.locationService,
+    this.initial,
+    this.confirmLocationChange,
   });
 
   final PickupMapBuilder mapBuilder;
   final LocationService? locationService;
+
+  // Set when editing an existing profile.
+  final VendorProfile? initial;
+
+  // Asked before a changed pin or address is saved. Returns false to cancel.
+  final Future<bool> Function(BuildContext context)? confirmLocationChange;
 
   @override
   State<VendorSetupPage> createState() => _VendorSetupPageState();
@@ -50,12 +59,40 @@ class _VendorSetupPageState extends State<VendorSetupPage> {
   String? _error;
   int _addressRequest = 0;
 
+  bool get _isEditing => widget.initial != null;
+
   @override
   void initState() {
     super.initState();
+    final initial = widget.initial;
     _phone = TextEditingController(
-      text: context.read<AuthProvider>().user?.phone ?? '',
+      text: initial?.phone ?? context.read<AuthProvider>().user?.phone ?? '',
     );
+    if (initial != null) {
+      _businessName.text = initial.businessName;
+      _description.text = initial.description;
+      _address.text = initial.address;
+      _mapTarget = initial.pin;
+      _pin = initial.pin;
+      _placeId = initial.placeId;
+      for (final field in [_businessName, _phone, _description, _address]) {
+        field.addListener(_onEdited);
+      }
+    }
+  }
+
+  void _onEdited() => setState(() {});
+
+  // Save Changes stays off until something differs from the saved profile.
+  bool get _hasChanges {
+    final initial = widget.initial;
+    if (initial == null) return true;
+    return _businessName.text.trim() != initial.businessName ||
+        _phone.text.trim() != initial.phone ||
+        _description.text.trim() != initial.description ||
+        _address.text.trim() != initial.address ||
+        _pin != initial.pin ||
+        _placeId != initial.placeId;
   }
 
   @override
@@ -117,6 +154,7 @@ class _VendorSetupPageState extends State<VendorSetupPage> {
       setState(() => _error = 'Set your pickup location to continue.');
     }
     if (!formValid || _pin == null) return;
+    if (_isEditing) return _saveChanges();
 
     setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
@@ -141,27 +179,73 @@ class _VendorSetupPageState extends State<VendorSetupPage> {
     }
   }
 
+  Future<void> _saveChanges() async {
+    final initial = widget.initial!;
+    final locationChanged =
+        _pin != initial.pin || _address.text.trim() != initial.address.trim();
+    final confirm = widget.confirmLocationChange;
+    if (locationChanged && confirm != null && !await confirm(context)) return;
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+    final navigator = Navigator.of(context);
+    try {
+      final moved = await context.read<VendorRepository>().updateProfile(
+        businessName: _businessName.text.trim(),
+        phone: _phone.text.trim(),
+        address: _address.text.trim(),
+        description: _description.text.trim(),
+        pin: _pin!,
+        placeId: _placeId,
+      );
+      navigator.pop(
+        !locationChanged
+            ? 'Vendor details updated.'
+            : moved == 0
+            ? 'Pickup location updated.'
+            : 'Pickup location updated on $moved '
+                  'listing${moved == 1 ? '' : 's'}.',
+      );
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     const gap = SizedBox(height: AppSpacing.md);
 
     return Scaffold(
+      appBar: _isEditing ? AppBar() : null,
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
-              Text('Set up your business', style: textTheme.headlineMedium),
+              Text(
+                _isEditing ? 'Vendor Details' : 'Set up your business',
+                style: _isEditing
+                    ? textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      )
+                    : textTheme.headlineMedium,
+              ),
               const SizedBox(height: AppSpacing.sm),
               const Text('Customers will see these details when ordering.'),
               const SizedBox(height: AppSpacing.lg),
               AppTextField(
-                label: 'Business name',
+                label: _isEditing ? 'Vendor name' : 'Business name',
                 icon: Icons.storefront_outlined,
                 controller: _businessName,
-                validator: VendorValidators.businessName,
+                validator: _isEditing
+                    ? (value) => VendorValidators.businessName(value) == null
+                          ? null
+                          : 'Vendor name must be 2 to 80 characters.'
+                    : VendorValidators.businessName,
               ),
               gap,
               AppTextField(
@@ -235,15 +319,17 @@ class _VendorSetupPageState extends State<VendorSetupPage> {
               const SizedBox(height: AppSpacing.lg),
               ErrorText(_error),
               AppButton(
-                label: 'Save and continue',
+                label: _isEditing ? 'Save Changes' : 'Save and continue',
                 isLoading: _isLoading,
-                onPressed: _submit,
+                onPressed: _hasChanges ? _submit : null,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              TextButton(
-                onPressed: context.read<AuthProvider>().logout,
-                child: const Text('Log out'),
-              ),
+              if (!_isEditing) ...[
+                const SizedBox(height: AppSpacing.sm),
+                TextButton(
+                  onPressed: context.read<AuthProvider>().logout,
+                  child: const Text('Log out'),
+                ),
+              ],
             ],
           ),
         ),

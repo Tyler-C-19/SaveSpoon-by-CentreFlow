@@ -9,6 +9,10 @@ const CONTENT = {
     subject: 'Password reset OTP',
     action: 'reset your password',
   },
+  change_email: {
+    subject: 'Email change OTP',
+    action: 'confirm your new email',
+  },
 };
 
 let transporter;
@@ -77,6 +81,47 @@ function buildOtpEmail(name, code, purpose) {
   return { subject, text, html };
 }
 
+function buildNoticeEmail(name, subject, message) {
+  const notYou = "If this wasn't you, reset your password in the SaveSpoon app straight away.";
+  const text = `Hi ${name},\n\n${message}\n\n${notYou}\n`;
+
+  const html = `<!doctype html>
+<html>
+<body style="margin:0;padding:24px;background:#f4f7f4;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;">
+    <tr>
+      <td style="padding:20px 28px;background:#28A745;border-radius:16px 16px 0 0;color:#ffffff;font-size:22px;font-weight:700;">SaveSpoon</td>
+    </tr>
+    <tr>
+      <td style="padding:28px;font-size:15px;line-height:1.6;">
+        <p style="margin:0 0 16px;">Hi ${escapeHtml(name)},</p>
+        <p style="margin:0 0 20px;">${escapeHtml(message)}</p>
+        <p style="margin:20px 0 0;font-size:13px;color:#6b7280;">${escapeHtml(notYou)}</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, text, html };
+}
+
+function buildPasswordChangedEmail(name) {
+  return buildNoticeEmail(
+    name,
+    'Your password was changed',
+    'The password for your SaveSpoon account was just changed. All other active sessions have been logged out.'
+  );
+}
+
+function buildEmailChangedEmail(name, newEmail) {
+  return buildNoticeEmail(
+    name,
+    'Your email was changed',
+    `The email for your SaveSpoon account was just changed to ${newEmail}. This address will no longer receive account emails.`
+  );
+}
+
 const RESEND_URL = 'https://api.resend.com/emails';
 
 async function sendWithResend(to, content) {
@@ -114,4 +159,14 @@ async function sendOtpEmail(to, name, code, purpose) {
   await send(to, buildOtpEmail(name, code, purpose));
 }
 
-module.exports = { sendOtpEmail, buildOtpEmail };
+async function sendPasswordChangedEmail(to, name) {
+  await send(to, buildPasswordChangedEmail(name));
+}
+
+async function sendEmailChangedEmail(to, name, newEmail) {
+  await send(to, buildEmailChangedEmail(name, newEmail));
+}
+
+module.exports = {
+  sendOtpEmail, buildOtpEmail, sendPasswordChangedEmail, buildPasswordChangedEmail, sendEmailChangedEmail, buildEmailChangedEmail,
+};
