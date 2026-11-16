@@ -69,7 +69,7 @@ function runSearchStages(pipeline, docs) {
       rows = rows.filter((row) => evaluate(stage.$match.$expr, row));
     }
   }
-  return rows.sort((a, b) => b._score - a._score || b.createdAt - a.createdAt);
+  return rows.sort((a, b) => b._score - a._score || (b._listedAt ?? b.createdAt) - (a._listedAt ?? a.createdAt));
 }
 
 const doc = (title, fields = {}) => ({
@@ -215,7 +215,7 @@ test('ties are newest first, and the server sorts by score then date', async () 
   const docs = [doc('Nasi Ayam', { createdAt: 1 }), doc('Nasi Kerabu', { createdAt: 2 })];
   const { titles, pipeline } = await searchFor('nasi', docs);
   assert.deepEqual(titles, ['Nasi Kerabu', 'Nasi Ayam']);
-  assert.deepEqual(stage(pipeline, '$sort'), { _score: -1, createdAt: -1, _id: -1 });
+  assert.deepEqual(stage(pipeline, '$sort'), { _score: -1, _listedAt: -1, _id: -1 });
 });
 
 test('symbols are treated as plain text', async () => {

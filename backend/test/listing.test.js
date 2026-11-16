@@ -41,6 +41,8 @@ beforeEach(() => {
   mock.restoreAll();
   delete process.env.GEMINI_API_KEY;
   delete process.env.GEMINI_MODEL;
+  // No same-name listing unless a test says otherwise.
+  mock.method(Listing, 'exists', async () => null);
 });
 
 function signedInAs(user) {
@@ -124,6 +126,51 @@ test('create saves an active listing using the vendor and location from the serv
   assert.equal('imageUrl' in saved, false);
   assert.equal(res.body.listing.status, 'active');
   assert.equal(res.body.listing.imageUrl, null);
+});
+
+test('create refuses a name the vendor already uses and saves nothing', async () => {
+  const user = makeUser('vendor');
+  const token = signedInAs(user);
+  const vendor = makeVendor(user);
+  const existingId = new mongoose.Types.ObjectId();
+  mock.method(Vendor, 'findOne', async () => vendor);
+  const exists = mock.method(Listing, 'exists', async () => ({ _id: existingId }));
+  const create = mock.method(Listing, 'create', async () => ({}));
+
+  const res = await call('/api/listings', {
+    method: 'POST',
+    token,
+    body: { ...validListing(), title: '  nasi   LEMAK ' },
+  });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.code, 'SAME_NAME');
+  assert.equal(res.body.listingId, String(existingId));
+  assert.equal(res.body.error, 'You already have a listing called nasi   LEMAK.');
+  assert.equal(create.mock.callCount(), 0);
+  const { vendor: vendorId, title } = exists.mock.calls[0].arguments[0];
+  assert.equal(vendorId, vendor._id);
+  for (const name of ['Nasi Lemak', 'nasi lemak', ' NASI  LEMAK ']) assert.match(name, title, name);
+  for (const name of ['Nasi Lemak (Large)', 'Nasi', 'Nasi Lemak Ayam']) assert.doesNotMatch(name, title, name);
+});
+
+test('the same-name check treats symbols in names as plain text', async () => {
+  const user = makeUser('vendor');
+  const token = signedInAs(user);
+  mock.method(Vendor, 'findOne', async () => makeVendor(user));
+  const exists = mock.method(Listing, 'exists', async () => null);
+  mock.method(Listing, 'create', async (fields) => new Listing(fields));
+
+  const res = await call('/api/listings', {
+    method: 'POST',
+    token,
+    body: { ...validListing(), title: 'Roti (2 pcs)+' },
+  });
+
+  assert.equal(res.status, 201);
+  const { title } = exists.mock.calls[0].arguments[0];
+  assert.match('roti (2 pcs)+', title);
+  assert.doesNotMatch('Roti 2 pcs', title);
 });
 
 test('create removes repeated allergens and defaults to none', async () => {

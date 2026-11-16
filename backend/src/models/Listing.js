@@ -17,7 +17,9 @@ const listingSchema = new mongoose.Schema(
     allergens: { type: [{ type: String, enum: ALLERGENS }], default: [] },
     otherAllergens: { type: [{ type: String, trim: true }], default: [] },
     imageUrl: { type: String, default: null },
-    status: { type: String, enum: ['active', 'sold_out', 'expired', 'cancelled'], default: 'active' },
+    status: { type: String, enum: ['active', 'paused', 'sold_out', 'expired', 'cancelled'], default: 'active' },
+    // When this round went on sale; relisting moves it forward. Older listings fall back to createdAt.
+    listedAt: { type: Date, default: Date.now },
     // Copied from the vendor when the listing is created, so "nearby" queries are simple
     location: {
       type: { type: String, enum: ['Point'], default: 'Point' },

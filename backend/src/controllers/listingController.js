@@ -3,7 +3,15 @@ const Vendor = require('../models/Vendor');
 const { findLiveListing, unavailableProblem, GONE, LISTING_GONE } = require('../services/orderService');
 const geminiService = require('../services/geminiService');
 const { descriptionError } = require('../validators/vendorValidators');
-const { listingError, titleError } = require('../validators/listingValidators');
+const mongoose = require('mongoose');
+const {
+  listingError,
+  titleError,
+  stockChangeError,
+  availabilityError,
+  relistError,
+} = require('../validators/listingValidators');
+const SalesRecord = require('../models/SalesRecord');
 const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
@@ -52,11 +60,28 @@ const publicFields = {
   },
 };
 
+// Relisted items count as newest from when they went back on sale.
+const withListedAt = { $addFields: { _listedAt: { $ifNull: ['$listedAt', '$createdAt'] } } };
+const NEWEST_FIRST = { _listedAt: -1, _id: -1 };
+
 function availablePipeline({ now, stock, sort, skip = 0, limit }) {
-  return [availableMatch(now, stock), { $sort: sort }, ...withStall, { $skip: skip }, { $limit: limit }, publicFields];
+  return [
+    availableMatch(now, stock),
+    withListedAt,
+    { $sort: sort },
+    ...withStall,
+    { $skip: skip },
+    { $limit: limit },
+    publicFields,
+  ];
 }
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// A vendor can't have two listings with the same name; case and spacing don't count.
+const SAME_NAME = 'SAME_NAME';
+const sameNamePattern = (title) =>
+  new RegExp(`^\\s*${title.trim().split(/\s+/).map(escapeRegex).join('\\s+')}\\s*$`, 'i');
 
 function searchWords(raw) {
   const text = raw.trim().replace(/\s+/g, ' ');
@@ -147,7 +172,8 @@ async function search(req, res) {
   const words = searchWords(q);
   const found = await Listing.aggregate([
     ...searchStages(now, words),
-    { $sort: { _score: -1, createdAt: -1, _id: -1 } },
+    withListedAt,
+    { $sort: { _score: -1, ...NEWEST_FIRST } },
     { $skip: (Number(page) - 1) * PAGE_SIZE },
     { $limit: PAGE_SIZE + 1 },
     searchFields,
@@ -167,7 +193,7 @@ async function getAvailable(req, res) {
   const found = await Listing.aggregate(
     availablePipeline({
       now: new Date(),
-      sort: { createdAt: -1, _id: -1 },
+      sort: NEWEST_FIRST,
       skip: (Number(page) - 1) * PAGE_SIZE,
       limit: PAGE_SIZE + 1,
     })
@@ -208,6 +234,14 @@ async function createListing(req, res) {
   if (!vendor) return res.status(404).json(NO_PROFILE);
 
   const { title, description, category, isHalal, originalPrice, discountedPrice } = req.body;
+  const sameName = await Listing.exists({ vendor: vendor._id, title: sameNamePattern(title) });
+  if (sameName) {
+    return res.status(409).json({
+      code: SAME_NAME,
+      listingId: String(sameName._id),
+      error: `You already have a listing called ${title.trim()}.`,
+    });
+  }
   const listing = await Listing.create({
     vendor: vendor._id,
     title: title.trim(),
@@ -230,7 +264,174 @@ async function getMine(req, res) {
   if (!vendor) return res.status(404).json(NO_PROFILE);
 
   const listings = await Listing.find({ vendor: vendor._id }).sort({ createdAt: -1 });
+  const listedTime = (item) => new Date(item.listedAt ?? item.createdAt ?? 0).getTime();
+  listings.sort((a, b) => listedTime(b) - listedTime(a));
   return res.json({ listings });
+}
+
+const LISTING_NOT_FOUND = { code: 'LISTING_NOT_FOUND', error: 'Listing not found.' };
+const PICKUP_OVER = { code: 'PICKUP_ENDED', error: 'Pickup has ended.' };
+const EDITABLE_STATUSES = ['active', 'paused'];
+
+// The vendor and their own listing, or null (after replying) when either is missing.
+async function findOwnListing(req, res) {
+  const vendor = await Vendor.findOne({ user: req.user._id });
+  if (!vendor) {
+    res.status(404).json(NO_PROFILE);
+    return null;
+  }
+  const listing = mongoose.isValidObjectId(req.params.id)
+    ? await Listing.findOne({ _id: req.params.id, vendor: vendor._id })
+    : null;
+  if (!listing) {
+    res.status(404).json(LISTING_NOT_FOUND);
+    return null;
+  }
+  return { listing, vendor };
+}
+
+// Items sold in earlier rounds of this listing.
+async function pastSoldFor(listingId) {
+  const [total] = await SalesRecord.aggregate([
+    { $match: { listing: listingId } },
+    { $group: { _id: null, sold: { $sum: '$sold' } } },
+  ]);
+  return total?.sold ?? 0;
+}
+
+async function getMineOne(req, res) {
+  const found = await findOwnListing(req, res);
+  if (!found) return undefined;
+  return res.json({ listing: found.listing, pastSold: await pastSoldFor(found.listing._id) });
+}
+
+function stockChanged(expected, current) {
+  const ordered = expected - current;
+  const error = ordered > 0
+    ? `${ordered} ${ordered === 1 ? 'item was' : 'items were'} ordered while you were editing. `
+      + `Current available stock is now ${current}.`
+    : `Current available stock changed to ${current} while you were editing.`;
+  return { code: 'STOCK_CHANGED', current, error };
+}
+
+async function updateStock(req, res) {
+  const invalid = stockChangeError(req.body);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const { listing } = (await findOwnListing(req, res)) ?? {};
+  if (!listing) return undefined;
+
+  const { quantity, expectedQuantity } = req.body;
+  const now = new Date();
+  // Set only if no order changed the stock since the vendor loaded it.
+  const updated = await Listing.findOneAndUpdate(
+    {
+      _id: listing._id,
+      status: { $in: EDITABLE_STATUSES },
+      pickupEnd: { $gt: now },
+      quantityAvailable: expectedQuantity,
+    },
+    { $set: { quantityAvailable: quantity } },
+    { returnDocument: 'after' }
+  );
+  if (updated) return res.json({ listing: updated });
+
+  const current = await Listing.findById(listing._id);
+  if (!current) return res.status(404).json(LISTING_NOT_FOUND);
+  if (current.pickupEnd <= now || !EDITABLE_STATUSES.includes(current.status)) {
+    return res.status(409).json(PICKUP_OVER);
+  }
+  return res.status(409).json(stockChanged(expectedQuantity, current.quantityAvailable));
+}
+
+async function updateAvailability(req, res) {
+  const invalid = availabilityError(req.body);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const { listing } = (await findOwnListing(req, res)) ?? {};
+  if (!listing) return undefined;
+
+  const updated = await Listing.findOneAndUpdate(
+    { _id: listing._id, status: { $in: EDITABLE_STATUSES }, pickupEnd: { $gt: new Date() } },
+    { $set: { status: req.body.paused ? 'paused' : 'active' } },
+    { returnDocument: 'after' }
+  );
+  if (!updated) return res.status(409).json(PICKUP_OVER);
+  return res.json({ listing: updated });
+}
+
+const PICKUP_STILL_OPEN = { code: 'PICKUP_NOT_ENDED', error: 'You can relist this once pickup has ended.' };
+const ALREADY_RELISTED = { code: 'ALREADY_RELISTED', error: 'This item has already been relisted.' };
+
+function salesRecordFrom(listing, vendor) {
+  const sold = listing.soldCount ?? 0;
+  const leftover = Math.max(listing.quantityAvailable, 0);
+  return {
+    listing: listing._id,
+    vendor: vendor._id,
+    stallName: vendor.stallName,
+    pickupAddress: vendor.address,
+    itemName: listing.title,
+    category: listing.category,
+    originalPrice: listing.originalPrice,
+    discountedPrice: listing.discountedPrice,
+    pickupStart: listing.pickupStart,
+    pickupEnd: listing.pickupEnd,
+    stockOffered: sold + leftover,
+    sold,
+    leftover,
+  };
+}
+
+// Saves the finished round as a sales record, then puts the same listing back on sale.
+async function relist(req, res) {
+  const now = new Date();
+  const invalid = relistError(req.body, now);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const found = await findOwnListing(req, res);
+  if (!found) return undefined;
+  const { listing, vendor } = found;
+  if (listing.pickupEnd > now) return res.status(409).json(PICKUP_STILL_OPEN);
+
+  // Matching the old pickup end means two relists of the same round can't both succeed.
+  const before = await Listing.findOneAndUpdate(
+    { _id: listing._id, pickupEnd: listing.pickupEnd },
+    {
+      $set: {
+        quantityAvailable: req.body.quantityAvailable,
+        pickupStart: new Date(req.body.pickupStart),
+        pickupEnd: new Date(req.body.pickupEnd),
+        soldCount: 0,
+        status: req.body.paused === true ? 'paused' : 'active',
+        listedAt: now,
+      },
+    },
+    { returnDocument: 'before' }
+  );
+  if (!before) return res.status(409).json(ALREADY_RELISTED);
+
+  try {
+    await SalesRecord.create(salesRecordFrom(before, vendor));
+  } catch (err) {
+    await Listing.updateOne(
+      { _id: before._id, listedAt: now },
+      {
+        $set: {
+          quantityAvailable: before.quantityAvailable,
+          pickupStart: before.pickupStart,
+          pickupEnd: before.pickupEnd,
+          soldCount: before.soldCount,
+          status: before.status,
+          listedAt: before.listedAt ?? before.createdAt,
+        },
+      }
+    );
+    throw err;
+  }
+
+  const relisted = await Listing.findById(listing._id);
+  return res.json({ listing: relisted, pastSold: await pastSoldFor(listing._id) });
 }
 
 async function suggestAllergens(req, res) {
@@ -254,4 +455,16 @@ async function suggestAllergens(req, res) {
   }
 }
 
-module.exports = { createListing, getAvailable, getRunningOut, search, getDetails, getMine, suggestAllergens };
+module.exports = {
+  createListing,
+  getAvailable,
+  getRunningOut,
+  search,
+  getDetails,
+  getMine,
+  getMineOne,
+  updateStock,
+  updateAvailability,
+  relist,
+  suggestAllergens,
+};
