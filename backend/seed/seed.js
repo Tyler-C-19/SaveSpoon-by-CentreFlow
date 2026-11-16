@@ -8,14 +8,18 @@ const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const Cart = require('../src/models/Cart');
+const SalesRecord = require('../src/models/SalesRecord');
 const { parseResetArgs, RESET_FLAG, CONFIRM_FLAG } = require('./resetGuard');
+const { sampleSalesRecords } = require('./sampleSalesRecords');
 const { sampleListings, STALL_NAMES } = require('./sampleListings');
 const { sampleOrders, sampleCart, SEED_REQUEST_PREFIX } = require('./sampleOrders');
 const { sampleSearchListings, sampleRefreshOps } = require('./sampleSearchListings');
 
 const LISTINGS_FLAG = '--listings';
 const SEARCH_SAMPLES_FLAG = '--search-samples';
+const SALES_RECORDS_FLAG = '--sales-records';
 const CUSTOMER_EMAILS = ['customer1@savespoon.test', 'customer2@savespoon.test'];
+const VENDOR_EMAILS = ['vendor1@savespoon.test', 'vendor2@savespoon.test', 'vendor3@savespoon.test'];
 const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
 
 async function addOrdersAndCart(customers, listings, stalls) {
@@ -48,7 +52,8 @@ async function seedListingsOnly() {
     return;
   }
   await addOrdersAndCart(customers, listings, stalls);
-  console.log('Seeded: 6 listings, 4 orders, 1 cart.');
+  const records = await SalesRecord.insertMany(sampleSalesRecords(listings, stalls));
+  console.log(`Seeded: 6 listings, 4 orders, ${records.length} sales records, 1 cart.`);
 }
 
 async function seedSearchSamples() {
@@ -66,7 +71,43 @@ async function seedSearchSamples() {
   console.log(`Search samples: ${result.upsertedCount} added, ${result.matchedCount} refreshed. Other listings unchanged.`);
 }
 
+// Adds sample sales records to the existing seeded listings, once.
+async function seedSalesRecordsOnly() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  await SalesRecord.init();
+
+  // Found by login email, since vendors may have renamed their stalls.
+  const users = await User.find({ email: { $in: VENDOR_EMAILS } });
+  const found = await Vendor.find({ user: { $in: users.map((user) => user._id) } });
+  const stalls = VENDOR_EMAILS.map((email) => {
+    const user = users.find((item) => item.email === email);
+    return user && found.find((vendor) => String(vendor.user) === String(user._id));
+  });
+  if (stalls.includes(undefined)) {
+    console.log('The seeded vendors are missing, so nothing changed.');
+    return;
+  }
+  const listings = await Listing.find({ vendor: { $in: stalls.map((stall) => stall._id) } });
+  let records;
+  try {
+    records = sampleSalesRecords(listings, stalls);
+  } catch {
+    console.log('The sample listings are missing, so nothing changed.');
+    return;
+  }
+  if ((await SalesRecord.countDocuments({ listing: { $in: records.map((record) => record.listing) } })) > 0) {
+    console.log('Sample sales records already exist, so nothing changed.');
+    return;
+  }
+  await SalesRecord.insertMany(records);
+  console.log(`Seeded: ${records.length} sales records. Other data unchanged.`);
+}
+
 async function seed() {
+  if (process.argv.includes(SALES_RECORDS_FLAG)) {
+    await seedSalesRecordsOnly();
+    return;
+  }
   if (process.argv.includes(SEARCH_SAMPLES_FLAG)) {
     await seedSearchSamples();
     return;
@@ -84,7 +125,7 @@ async function seed() {
   }
 
   await mongoose.connect(process.env.MONGODB_URI);
-  await Promise.all([User.init(), Vendor.init(), Listing.init(), Order.init(), Cart.init()]);
+  await Promise.all([User.init(), Vendor.init(), Listing.init(), Order.init(), Cart.init(), SalesRecord.init()]);
 
   const seededUsers = { role: { $ne: 'admin' } };
   if ((await User.countDocuments(seededUsers)) > 0 && !reset) {
@@ -95,10 +136,11 @@ async function seed() {
   if (reset) {
     await Cart.deleteMany({});
     await Order.deleteMany({});
+    await SalesRecord.deleteMany({});
     await Listing.deleteMany({});
     await Vendor.deleteMany({});
     await User.deleteMany(seededUsers);
-    console.log('Old users, vendors, listings, orders and carts cleared.');
+    console.log('Old users, vendors, listings, orders, sales records and carts cleared.');
   }
 
   const passwordHash = await bcrypt.hash('Password123', 10);
@@ -130,8 +172,9 @@ async function seed() {
   const stalls = [stall1, stall2, stall3];
   const listings = await Listing.insertMany(sampleListings(stalls));
   await addOrdersAndCart([customer1, customer2], listings, stalls);
+  const records = await SalesRecord.insertMany(sampleSalesRecords(listings, stalls));
 
-  console.log('Seeded: 5 users, 3 vendors, 6 listings, 4 orders, 1 cart.');
+  console.log(`Seeded: 5 users, 3 vendors, 6 listings, 4 orders, ${records.length} sales records, 1 cart.`);
   console.log('Test login password for every seeded account: Password123');
 }
 
