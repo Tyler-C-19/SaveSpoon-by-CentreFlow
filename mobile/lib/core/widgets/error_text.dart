@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../network/api_client.dart';
 import '../theme/app_theme.dart';
 
 class ErrorText extends StatelessWidget {
@@ -11,6 +12,7 @@ class ErrorText extends StatelessWidget {
   Widget build(BuildContext context) {
     if (message == null) return const SizedBox.shrink();
     final colors = Theme.of(context).colorScheme;
+    final serverDown = ServerMessages.all.contains(message);
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -21,7 +23,11 @@ class ErrorText extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, size: 20, color: colors.onErrorContainer),
+          Icon(
+            serverDown ? Icons.power_off_outlined : Icons.error_outline,
+            size: 20,
+            color: colors.onErrorContainer,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(

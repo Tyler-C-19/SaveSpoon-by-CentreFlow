@@ -29,6 +29,8 @@ class EditDetailsPage extends StatefulWidget {
 
   static const String savedMessage = 'Account details updated.';
   static const String picMessage = 'Profile picture updated.';
+  static const String emailOfflineNote =
+      "Can't be changed until the server can be reached.";
 
   // Passed on to the Edit Profile Picture page.
   final PhotoPicker? photoPicker;
@@ -382,6 +384,18 @@ class _EditDetailsPageState extends State<EditDetailsPage> {
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.email],
                     validator: AuthValidators.email,
+                  ),
+                )
+              else if (_savedProfile == null)
+                // The profile couldn't load, so the email shows but can't be edited.
+                TextFormField(
+                  initialValue: _currentEmail,
+                  enabled: false,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    prefixIcon: Icon(Icons.email_outlined),
+                    helperText: EditDetailsPage.emailOfflineNote,
+                    helperMaxLines: 2,
                   ),
                 )
               else

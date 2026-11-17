@@ -303,7 +303,7 @@ void main() {
       });
 
       expect(find.text('Could not load.'), findsOneWidget);
-      await tester.tap(find.text('Try again'));
+      await tester.tap(find.text('Try Again'));
       await tester.pumpAndSettle();
       expect(find.text('No listings yet'), findsOneWidget);
     });

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/load_error.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../data/profile_repository.dart';
 import '../../domain/user_profile.dart';
@@ -191,7 +192,11 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
               const SizedBox(height: AppSpacing.lg),
               if (_error != null) ...[
-                _LoadError(message: _error!, onRetry: _load),
+                LoadError(
+                  title: "Couldn't load your latest details",
+                  message: _error!,
+                  onRetry: _load,
+                ),
                 gap,
               ],
               _Section(
@@ -498,23 +503,6 @@ class _ChangeBanner extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _LoadError extends StatelessWidget {
-  const _LoadError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: Text(message)),
-        TextButton(onPressed: onRetry, child: const Text('Try again')),
-      ],
     );
   }
 }
