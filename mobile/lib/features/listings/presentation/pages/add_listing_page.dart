@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/error_text.dart';
 import '../../data/listing_repository.dart';
+import '../../domain/listing.dart';
 import '../../domain/listing_validators.dart';
 import '../../domain/pickup_times.dart';
 import '../widgets/allergen_picker.dart';
@@ -25,15 +26,32 @@ Future<TimeOfDay?> _materialTimePicker(
 
 DateTime _systemNow() => DateTime.now();
 
+typedef ListingOpener = Future<Listing?> Function(
+  BuildContext context,
+  Listing listing,
+);
+
+Future<Listing?> _openNothing(BuildContext context, Listing listing) async =>
+    null;
+
 class AddListingPage extends StatefulWidget {
   const AddListingPage({
     super.key,
     this.timePicker = _materialTimePicker,
     this.now = _systemNow,
+    this.existing = const [],
+    this.onOpenExisting = _openNothing,
+    this.onRelistExisting = _openNothing,
   });
 
   final TimePicker timePicker;
   final DateTime Function() now;
+  // The vendor's listings, checked for the same name before saving.
+  final List<Listing> existing;
+  // Open over this form; coming back returns to the form as it was.
+  final ListingOpener onOpenExisting;
+  // Returns the listing if it was relisted, which also closes this form.
+  final ListingOpener onRelistExisting;
 
   @override
   State<AddListingPage> createState() => _AddListingPageState();
@@ -70,6 +88,62 @@ class _AddListingPageState extends State<AddListingPage> {
     final start = PickupTimes.defaultStart(widget.now());
     _start = TimeOfDay.fromDateTime(start);
     _end = TimeOfDay.fromDateTime(PickupTimes.defaultEnd(start));
+    // Rebuild as the name changes so a same-item note can show straight away.
+    _title.addListener(_nameChanged);
+  }
+
+  Listing? _shownSameName;
+
+  void _nameChanged() {
+    final match = _sameNameListing();
+    if (match?.id != _shownSameName?.id) setState(() => _shownSameName = match);
+  }
+
+  // Puts the name last so the sentence reads right for any item name.
+  String _sameItemLine(Listing existing) {
+    final listed = existing.isAvailableAt(widget.now());
+    return 'You already have a listing for ${existing.title}, '
+        '${listed ? "and it's active" : "but it's unlisted"}.';
+  }
+
+  String _sameItemAction(Listing existing) =>
+      existing.canRelistAt(widget.now()) ? 'Relist It' : 'View Listing';
+
+  // A short note under Item name while it matches one of the vendor's items.
+  Widget _sameNameNote(Listing existing) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const ValueKey('same-item-note'),
+      margin: const EdgeInsets.only(top: AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.xs,
+        AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.warningPale,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 18, color: AppColors.onWarning),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              _sameItemLine(existing),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.onWarning,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _openSameName(existing),
+            child: Text(_sameItemAction(existing)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -155,6 +229,66 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
+  static String _nameKey(String name) =>
+      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  Listing? _sameNameListing() {
+    final key = _nameKey(_title.text);
+    for (final listing in widget.existing) {
+      if (_nameKey(listing.title) == key) return listing;
+    }
+    return null;
+  }
+
+  // Opens the existing listing over the form. A finished relist closes the
+  // form too; otherwise the vendor comes back to what they typed.
+  Future<void> _openSameName(Listing existing) async {
+    if (!existing.canRelistAt(widget.now())) {
+      await widget.onOpenExisting(context, existing);
+      return;
+    }
+    final relisted = await widget.onRelistExisting(context, existing);
+    if (relisted != null && mounted) context.pop(relisted);
+  }
+
+  // Same names aren't allowed, so the only ways on are the existing listing
+  // (true) or Cancel (false), which leaves this form. Null: popup dismissed.
+  Future<bool?> _askAboutSameName(Listing existing) async {
+    final error = Theme.of(context).colorScheme.error;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Same Item Found'),
+        // The button carries the next step, so the text is just the fact.
+        content: Text(_sameItemLine(existing)),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: error,
+                    side: BorderSide(color: error),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(_sameItemAction(existing)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    return open;
+  }
+
   Future<void> _submit() async {
     if (_isSaving) return;
     final formValid = _formKey.currentState!.validate();
@@ -169,6 +303,20 @@ class _AddListingPageState extends State<AddListingPage> {
       _error = complete ? null : 'Check the highlighted fields.';
     });
     if (!complete) return;
+
+    final sameName = _sameNameListing();
+    if (sameName != null) {
+      setState(() => _error = null);
+      final open = await _askAboutSameName(sameName);
+      if (!mounted || open == null) return;
+      if (open) {
+        await _openSameName(sameName);
+      } else {
+        // Cancel goes back to where the vendor came from.
+        context.pop();
+      }
+      return;
+    }
 
     setState(() => _isSaving = true);
     final now = widget.now();
@@ -247,6 +395,8 @@ class _AddListingPageState extends State<AddListingPage> {
                   controller: _title,
                   validator: ListingValidators.title,
                 ),
+                if (_shownSameName case final existing?)
+                  _sameNameNote(existing),
                 gap,
                 AppTextField(
                   label: 'Description (optional)',
