@@ -146,7 +146,7 @@ async function checkout(req, res) {
 
   const customer = req.user._id;
   const earlier = await Order.find({ customer, checkoutId: requestId });
-  if (earlier.length) return res.json({ orders: earlier });
+  if (earlier.length) return res.json({ orders: earlier.map((order) => orderService.withCancelUntil(order)) });
 
   const cart = await Cart.findOne({ customer });
   const { view, entries } = await viewCart(cart);
@@ -199,7 +199,7 @@ async function checkout(req, res) {
   } catch (err) {
     console.error('Emptying the cart failed:', err.message);
   }
-  return res.status(201).json({ orders });
+  return res.status(201).json({ orders: orders.map((order) => orderService.withCancelUntil(order)) });
 }
 
 module.exports = {

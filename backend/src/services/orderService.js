@@ -118,13 +118,13 @@ async function placeOrder({ customer, listingId, quantity, requestId }) {
   }
 }
 
-const ORDER_TABS = ['all', 'upcoming', 'history'];
+const ORDER_TABS = ['all', 'upcoming', 'history', 'cancelled'];
 const OPEN_STATUSES = ['pending', 'confirmed'];
 const ORDER_AGAIN_SIZE = 6;
 // How many past items are checked for Order Again before giving up.
 const ORDER_AGAIN_LOOKBACK = 50;
 
-const ORDER_FIELDS = 'itemName category stallName pickupAddress pickupStart pickupEnd quantity unitPrice originalUnitPrice totalPrice status checkoutId createdAt';
+const ORDER_FIELDS = 'itemName category stallName pickupAddress pickupStart pickupEnd quantity unitPrice originalUnitPrice totalPrice status checkoutId createdAt cancelledAt cancelledBy cancelReason';
 const CARD_FIELDS = 'title description category isHalal originalPrice discountedPrice quantityAvailable soldCount pickupStart pickupEnd allergens otherAllergens imageUrl status createdAt vendor';
 
 // Upcoming: still to collect. History: finished, cancelled, or the pickup window has passed.
@@ -134,6 +134,9 @@ function orderTabQuery(tab, customer, now = new Date()) {
       filter: { customer, status: { $in: OPEN_STATUSES }, pickupEnd: { $gt: now } },
       sort: { pickupStart: 1, pickupEnd: 1, _id: 1 },
     };
+  }
+  if (tab === 'cancelled') {
+    return { filter: { customer, status: 'cancelled' }, sort: { createdAt: -1, _id: -1 } };
   }
   if (tab === 'history') {
     return {
@@ -198,7 +201,188 @@ async function orderAgainListings(customer, now = new Date()) {
     .map(({ vendor, ...listing }) => ({ ...listing, stallName: stallNames.get(String(vendor)) }));
 }
 
+const CANCEL_GRACE_MS = 5 * 60 * 1000;
+const CANCEL_LIMIT = 5;
+const CANCEL_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CANCEL_LIMIT_CODE = 'CANCEL_LIMIT';
+
+const ORDER_NOT_FOUND_PROBLEM = { status: 404, error: "We couldn't find this order." };
+
+// Open orders can be cancelled before pickup starts, or within a few minutes of ordering,
+// but never once pickup has ended.
+function cancellableFilter(now = new Date()) {
+  return {
+    status: { $in: OPEN_STATUSES },
+    pickupEnd: { $gt: now },
+    $or: [
+      { pickupStart: { $gt: now } },
+      { createdAt: { $gt: new Date(now.getTime() - CANCEL_GRACE_MS) } },
+    ],
+  };
+}
+
+function cancelUntil(order, now = new Date()) {
+  if (!OPEN_STATUSES.includes(order.status)) return null;
+  const start = order.pickupStart && new Date(order.pickupStart).getTime();
+  const end = order.pickupEnd && new Date(order.pickupEnd).getTime();
+  const placed = order.createdAt && new Date(order.createdAt).getTime();
+  if (!start || !end) return null;
+  const until = Math.min(Math.max(start, placed ? placed + CANCEL_GRACE_MS : 0), end);
+  return until > now.getTime() ? new Date(until) : null;
+}
+
+// A newly placed order with its cancel deadline, for the Order Placed page.
+function withCancelUntil(order, now = new Date()) {
+  if (!order) return order;
+  const plain = order.toObject ? order.toObject() : order;
+  return { ...plain, cancelUntil: cancelUntil(plain, now) };
+}
+
+function cancelClosedProblem(order, now = new Date()) {
+  if (order.status === 'cancelled') {
+    return { status: 409, code: 'ALREADY_CANCELLED', error: 'This order is already cancelled.' };
+  }
+  if (order.status === 'completed') {
+    return { status: 409, code: 'ORDER_COMPLETED', error: 'This order has already been collected.' };
+  }
+  if (new Date(order.pickupEnd) <= now) {
+    return { status: 409, code: PICKUP_ENDED, error: 'Pickup for this order has ended.' };
+  }
+  return {
+    status: 409,
+    code: 'PICKUP_STARTED',
+    error: 'Pickup has started, so this order can no longer be cancelled.',
+  };
+}
+
+function waitLabel(ms) {
+  const minutes = Math.max(1, Math.ceil(ms / 60000));
+  if (minutes < 60) return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+  const hours = Math.ceil(minutes / 60);
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+}
+
+// Orders cancelled together share one cancelledAt, so a whole checkout counts once.
+async function cancelLimitProblem(customer, now = new Date()) {
+  const since = new Date(now.getTime() - CANCEL_LIMIT_WINDOW_MS);
+  const recent = await Order.aggregate([
+    { $match: { customer, cancelledBy: 'customer', cancelledAt: { $gt: since } } },
+    { $group: { _id: '$cancelledAt' } },
+    { $sort: { _id: -1 } },
+    { $limit: CANCEL_LIMIT },
+  ]);
+  if (recent.length < CANCEL_LIMIT) return null;
+  const freeAt = new Date(recent[CANCEL_LIMIT - 1]._id).getTime() + CANCEL_LIMIT_WINDOW_MS;
+  return {
+    status: 429,
+    code: CANCEL_LIMIT_CODE,
+    error: `You can cancel up to ${CANCEL_LIMIT} times in 24 hours. Try again in about ${waitLabel(freeAt - now.getTime())}.`,
+  };
+}
+
+// Stock goes back only to the round the order came from, so a later round is never changed.
+function returnStock(order) {
+  return Listing.updateOne(
+    { _id: order.listing, pickupEnd: order.pickupEnd, soldCount: { $gte: order.quantity } },
+    { $inc: { quantityAvailable: order.quantity, soldCount: -order.quantity } }
+  );
+}
+
+async function cancelOne({ customer, orderId, reason, now }) {
+  const changes = { status: 'cancelled', cancelledAt: now, cancelledBy: 'customer' };
+  if (reason) changes.cancelReason = reason;
+  // Matching only cancellable orders means a repeated request can't return stock twice.
+  const cancelled = await Order.findOneAndUpdate(
+    { _id: orderId, customer, ...cancellableFilter(now) },
+    { $set: changes },
+    { returnDocument: 'after' }
+  );
+  if (cancelled) await returnStock(cancelled);
+  return cancelled;
+}
+
+function publicOrder(order) {
+  const { customer, vendor, listing, requestId, ...rest } = order.toObject ? order.toObject() : order;
+  return rest;
+}
+
+async function cancelOrder({ customer, orderId, reason, wholeCheckout = false, now = new Date() }) {
+  if (!mongoose.isValidObjectId(orderId)) return { problem: ORDER_NOT_FOUND_PROBLEM };
+  const order = await Order.findOne({ _id: orderId, customer });
+  if (!order) return { problem: ORDER_NOT_FOUND_PROBLEM };
+  if (!cancelUntil(order, now)) return { problem: cancelClosedProblem(order, now) };
+
+  const limited = await cancelLimitProblem(customer, now);
+  if (limited) return { problem: limited };
+
+  const first = await cancelOne({ customer, orderId: order._id, reason, now });
+  if (!first) {
+    const latest = (await Order.findOne({ _id: order._id, customer })) ?? order;
+    return { problem: cancelClosedProblem(latest, now) };
+  }
+
+  const cancelled = [first];
+  const skipped = [];
+  if (wholeCheckout && order.checkoutId) {
+    const others = await Order.find({
+      customer,
+      checkoutId: order.checkoutId,
+      _id: { $ne: order._id },
+      status: { $in: OPEN_STATUSES },
+      pickupEnd: { $gt: now },
+    });
+    for (const other of others) {
+      const done = await cancelOne({ customer, orderId: other._id, reason, now });
+      if (done) cancelled.push(done);
+      else skipped.push(other);
+    }
+  }
+  return { cancelled: cancelled.map(publicOrder), skipped: skipped.map(publicOrder) };
+}
+
+const CHECKOUT_ITEM_FIELDS = 'itemName quantity stallName status createdAt pickupStart pickupEnd';
+
+// Adds when the order can be cancelled until, and the other open orders from its checkout.
+async function withCancelInfo(order, customer, now = new Date()) {
+  const until = cancelUntil(order, now);
+  let checkoutOrders = [];
+  if (until && order.checkoutId) {
+    const others = await Order.find(
+      {
+        customer,
+        checkoutId: order.checkoutId,
+        _id: { $ne: order._id },
+        status: { $in: OPEN_STATUSES },
+        pickupEnd: { $gt: now },
+      },
+      CHECKOUT_ITEM_FIELDS,
+      { sort: { createdAt: 1, _id: 1 }, lean: true }
+    );
+    checkoutOrders = others.map((other) => ({
+      _id: other._id,
+      itemName: other.itemName,
+      quantity: other.quantity,
+      stallName: other.stallName,
+      canCancel: Boolean(cancelUntil(other, now)),
+    }));
+  }
+  return {
+    ...order,
+    cancelUntil: until,
+    checkoutOrders,
+    otherCancellable: checkoutOrders.filter((other) => other.canCancel).length,
+  };
+}
+
 module.exports = {
+  CANCEL_GRACE_MS,
+  CANCEL_LIMIT,
+  CANCEL_LIMIT_CODE,
+  cancellableFilter,
+  cancelUntil,
+  withCancelUntil,
+  cancelOrder,
+  withCancelInfo,
   ORDER_TABS,
   ORDER_AGAIN_SIZE,
   orderTabQuery,
