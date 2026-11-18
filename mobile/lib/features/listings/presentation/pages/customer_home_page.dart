@@ -6,6 +6,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/auto_refresh.dart';
+import '../../../orders/data/order_repository.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../providers/listing_changes.dart';
@@ -37,6 +38,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
 
   List<Listing>? _listings;
   List<Listing> _runningOut = const [];
+  List<Listing> _orderAgain = const [];
   String? _error;
   String? _loadMoreError;
   bool _hasMore = false;
@@ -75,6 +77,14 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
     }
   }
 
+  Future<List<Listing>> _fetchOrderAgain() async {
+    try {
+      return await context.read<OrderRepository>().fetchOrderAgain();
+    } on ApiException {
+      return const [];
+    }
+  }
+
   @override
   Future<void> autoRefresh() async {
     if (_page == 1 && !_loadingMore) await _load(silent: true);
@@ -84,13 +94,16 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
     final request = ++_requestId;
     final repository = context.read<ListingRepository>();
     final runningOut = _fetchRunningOut(repository);
+    final orderAgain = _fetchOrderAgain();
     try {
       final first = await repository.fetchAvailable();
       final strip = await runningOut;
+      final again = await orderAgain;
       if (!mounted || request != _requestId) return;
       setState(() {
         _listings = first.listings;
         _runningOut = strip;
+        _orderAgain = again;
         _hasMore = first.hasMore;
         _page = 1;
         _error = null;
@@ -280,6 +293,10 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
       for (final item in _runningOut)
         if (item.isAvailableAt(now)) item,
     ];
+    final orderAgain = [
+      for (final item in _orderAgain)
+        if (item.isAvailableAt(now)) item,
+    ];
 
     return SafeArea(
       child: RefreshIndicator(
@@ -330,6 +347,31 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
               ),
               SliverToBoxAdapter(
                 child: RunningOutStrip(listings: runningOut, onOpen: _open),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
+            ],
+            if (orderAgain.isNotEmpty) ...[
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                ),
+                sliver: SliverToBoxAdapter(
+                  child: _SectionTitle(
+                    icon: Icons.replay,
+                    color: theme.colorScheme.primary,
+                    text: 'Order Again',
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: RunningOutStrip(
+                  key: const ValueKey('order-again-strip'),
+                  listings: orderAgain,
+                  onOpen: _open,
+                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
             ],

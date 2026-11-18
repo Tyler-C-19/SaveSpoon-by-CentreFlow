@@ -75,6 +75,9 @@ Future<void> startApp(
         if (request.url.path == '/api/health') {
           return jsonResponse({'status': 'ok'});
         }
+        if (request.url.path == '/api/orders/again') {
+          return jsonResponse({'listings': []});
+        }
         const browsePaths = {'/api/listings', '/api/listings/running-out'};
         if (stubBrowse && request.method == 'GET') {
           if (browsePaths.contains(request.url.path)) {

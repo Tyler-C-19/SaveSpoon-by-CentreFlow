@@ -11,6 +11,7 @@ import 'package:savespoon/features/listings/presentation/pages/customer_home_pag
 import 'package:savespoon/features/listings/presentation/providers/listing_changes.dart';
 import 'package:savespoon/features/listings/presentation/widgets/listing_card.dart';
 import 'package:savespoon/features/listings/presentation/widgets/running_out_strip.dart';
+import 'package:savespoon/features/orders/data/order_repository.dart';
 
 import 'helpers.dart';
 
@@ -45,17 +46,26 @@ Future<void> _pump(
   WidgetTester tester,
   MockClientHandler onRequest, {
   Size size = const Size(800, 1600),
+  MockClientHandler? onOrderAgain,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  final api = ApiClient(
+    client: MockClient((request) async {
+      if (request.url.path == '/api/orders/again') {
+        return onOrderAgain == null
+            ? jsonResponse({'listings': []})
+            : onOrderAgain(request);
+      }
+      return onRequest(request);
+    }),
+  );
   await tester.pumpWidget(
     MultiProvider(
       providers: [
-        Provider<ListingRepository>(
-          create: (_) =>
-              ListingRepository(ApiClient(client: MockClient(onRequest))),
-        ),
+        Provider<ListingRepository>(create: (_) => ListingRepository(api)),
+        Provider<OrderRepository>(create: (_) => OrderRepository(api)),
         ChangeNotifierProvider<ListingChanges>(create: (_) => ListingChanges()),
       ],
       child: MaterialApp(
@@ -111,6 +121,10 @@ void main() {
           Provider<ListingRepository>(
             create: (_) =>
                 ListingRepository(ApiClient(client: MockClient(_server()))),
+          ),
+          Provider<OrderRepository>(
+            create: (_) =>
+                OrderRepository(ApiClient(client: MockClient(_server()))),
           ),
           ChangeNotifierProvider<ListingChanges>(
             create: (_) => ListingChanges(),
@@ -396,6 +410,66 @@ void main() {
         tester.getTopLeft(find.text('Running Out Soon')).dy,
         lessThan(tester.getTopLeft(find.text("What's New")).dy),
       );
+    });
+  });
+
+  group('Order Again', () {
+    testWidgets('sits between Running Out Soon and What\'s New', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _server(
+          listings: [_listing(id: 'a', title: 'Grid item')],
+          runningOut: [_listing(id: 'b', title: 'Strip item', stock: 2)],
+        ),
+        onOrderAgain: (_) async => jsonResponse({
+          'listings': [
+            _listing(id: 'c', title: 'Ordered before'),
+            _listing(id: 'd', title: 'Pickup over', endsInHours: 0),
+          ],
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      final strip = find.byKey(const ValueKey('order-again-strip'));
+      expect(find.text('Order Again'), findsOneWidget);
+      expect(
+        find.descendant(of: strip, matching: find.text('Ordered before')),
+        findsOneWidget,
+      );
+      expect(find.text('Pickup over'), findsNothing);
+      final top = tester.getTopLeft(find.text('Order Again')).dy;
+      expect(
+        tester.getTopLeft(find.text('Running Out Soon')).dy,
+        lessThan(top),
+      );
+      expect(top, lessThan(tester.getTopLeft(find.text("What's New")).dy));
+    });
+
+    testWidgets('is hidden when nothing qualifies or the request fails', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _server(
+          listings: [_listing(id: 'a', title: 'Grid item')],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Order Again'), findsNothing);
+
+      await _pump(
+        tester,
+        _server(
+          listings: [_listing(id: 'a', title: 'Grid item')],
+        ),
+        onOrderAgain: (_) async =>
+            jsonResponse({'error': 'Something went wrong.'}, 500),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Order Again'), findsNothing);
+      expect(find.text('Grid item'), findsOneWidget);
     });
   });
 
