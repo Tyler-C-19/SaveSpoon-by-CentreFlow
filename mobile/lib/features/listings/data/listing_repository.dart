@@ -32,10 +32,15 @@ class SearchResults {
 
 // A vendor's own listing plus the items sold in its earlier rounds.
 class OwnListing {
-  const OwnListing({required this.listing, required this.pastSold});
+  const OwnListing({
+    required this.listing,
+    required this.pastSold,
+    this.activeOrderCount = 0,
+  });
 
   final Listing listing;
   final int pastSold;
+  final int activeOrderCount;
 
   int get totalSold => pastSold + listing.soldCount;
 }
@@ -128,6 +133,7 @@ class ListingRepository {
   OwnListing _ownListing(dynamic data) => OwnListing(
     listing: Listing.fromJson(data['listing'] as Map<String, dynamic>),
     pastSold: data['pastSold'] as int? ?? 0,
+    activeOrderCount: data['activeOrderCount'] as int? ?? 0,
   );
 
   Future<OwnListing> fetchMineOne(String id) async =>
@@ -170,6 +176,50 @@ class ListingRepository {
       throw StockChangedException(e.message, (await fetchMineOne(id)).listing);
     }
   }
+
+  // Stock changes only if it still equals expectedQuantity on the server;
+  // otherwise throws StockChangedException with the listing as it is now.
+  Future<Listing> update({
+    required String id,
+    required String title,
+    required String description,
+    required String category,
+    required bool isHalal,
+    required double originalPrice,
+    required double discountedPrice,
+    required int quantityAvailable,
+    required int expectedQuantity,
+    required DateTime pickupStart,
+    required DateTime pickupEnd,
+    required List<String> allergens,
+    required List<String> otherAllergens,
+  }) async {
+    try {
+      final data = await api.patch(
+        '/api/listings/$id',
+        body: {
+          'title': title,
+          'description': description,
+          'category': category,
+          'isHalal': isHalal,
+          'originalPrice': originalPrice,
+          'discountedPrice': discountedPrice,
+          'quantityAvailable': quantityAvailable,
+          'expectedQuantity': expectedQuantity,
+          'pickupStart': pickupStart.toUtc().toIso8601String(),
+          'pickupEnd': pickupEnd.toUtc().toIso8601String(),
+          'allergens': allergens,
+          'otherAllergens': otherAllergens,
+        },
+      );
+      return Listing.fromJson(data['listing'] as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.code != StockChangedException.code) rethrow;
+      throw StockChangedException(e.message, (await fetchMineOne(id)).listing);
+    }
+  }
+
+  Future<void> delete(String id) => api.delete('/api/listings/$id');
 
   Future<Listing> setPaused(String id, {required bool paused}) async {
     final data = await api.patch(
