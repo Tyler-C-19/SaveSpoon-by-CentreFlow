@@ -26,6 +26,8 @@ class ListingCard extends StatelessWidget {
     required this.listing,
     this.showBadges = false,
     this.onTap,
+    this.relisted = false,
+    this.onRelist,
   });
 
   static const double browseHeight = 250;
@@ -33,6 +35,10 @@ class ListingCard extends StatelessWidget {
   final Listing listing;
   final bool showBadges;
   final VoidCallback? onTap;
+  // Vendor cards only: relisted while the vendor has stayed on the tab.
+  final bool relisted;
+  // Vendor cards only: a Relist button on the picture once pickup has ended.
+  final VoidCallback? onRelist;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +49,23 @@ class ListingCard extends StatelessWidget {
     final now = DateTime.now();
     final unlisted = listing.unlistedLabelAt(now);
     final badge = showBadges ? listing.badgeAt(now) : null;
+    final showRelist =
+        onRelist != null && !showBadges && listing.canRelistAt(now);
+    // With "Relist Now", the picture and text fade but its label doesn't;
+    // otherwise the whole card fades.
+    Widget faded(Widget child) =>
+        showRelist ? Opacity(opacity: 0.7, child: child) : child;
+    // With "Relist Now", the text area has its own tap and ripple.
+    Widget textTap(Widget child) => showRelist && onTap != null
+        ? Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              key: ValueKey('listing-card-${listing.id}'),
+              onTap: onTap,
+              child: child,
+            ),
+          )
+        : child;
 
     final card = Container(
       clipBehavior: Clip.antiAlias,
@@ -59,150 +82,239 @@ class ListingCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: unlisted == null
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primaryPale, AppColors.primarySoft],
-                      )
-                    : null,
-                color: unlisted == null ? null : AppColors.unlisted,
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Center(
-                    child: Icon(
-                      categoryIcon(listing.category),
-                      size: 48,
-                      color: unlisted == null
-                          ? colors.primary
-                          : AppColors.textMuted,
-                    ),
+            child: _withRelist(
+              showRelist ? onRelist : null,
+              faded(
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: unlisted == null
+                        ? const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppColors.primaryPale,
+                              AppColors.primarySoft,
+                            ],
+                          )
+                        : null,
+                    color: unlisted == null ? null : AppColors.unlisted,
                   ),
-                  if (badge != null)
-                    Positioned(
-                      top: AppSpacing.sm,
-                      left: 0,
-                      child: ListingRibbon(badge: badge, listing: listing),
-                    ),
-                  if (unlisted == null && listing.isHalal == false)
-                    Positioned(
-                      top: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      child: _Pill(text: 'Non-Halal', color: colors.onSurface),
-                    ),
-                  if (showBadges && unlisted == null)
-                    Positioned(
-                      bottom: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      child: SavePill(listing: listing),
-                    ),
-                ],
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (!showRelist)
+                        Center(
+                          child: Icon(
+                            categoryIcon(listing.category),
+                            size: 48,
+                            color: unlisted == null
+                                ? colors.primary
+                                : AppColors.textMuted,
+                          ),
+                        ),
+                      if (badge != null)
+                        Positioned(
+                          top: AppSpacing.sm,
+                          left: 0,
+                          child: ListingRibbon(badge: badge, listing: listing),
+                        ),
+                      if (unlisted == null && listing.isHalal == false)
+                        Positioned(
+                          top: AppSpacing.sm,
+                          right: AppSpacing.sm,
+                          child: _Pill(
+                            text: 'Non-Halal',
+                            color: colors.onSurface,
+                          ),
+                        ),
+                      if (showBadges && unlisted == null)
+                        Positioned(
+                          bottom: AppSpacing.sm,
+                          right: AppSpacing.sm,
+                          child: SavePill(listing: listing),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (listing.stallName != null)
-                  Text(
-                    'From ${listing.stallName}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: muted,
-                  ),
-                Text(
-                  listing.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
+          textTap(
+            faded(
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      moneyLabel(listing.discountedPrice),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: unlisted == null
-                            ? colors.primary
-                            : AppColors.textMuted,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Flexible(
-                      child: Text(
-                        moneyLabel(listing.originalPrice),
+                    if (listing.stallName != null)
+                      Text(
+                        'From ${listing.stallName}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: muted?.copyWith(
-                          decoration: TextDecoration.lineThrough,
-                        ),
+                        style: muted,
                       ),
+                    Text(
+                      listing.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Text(
+                          moneyLabel(listing.discountedPrice),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: unlisted == null
+                                ? colors.primary
+                                : AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Flexible(
+                          child: Text(
+                            moneyLabel(listing.originalPrice),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted?.copyWith(
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    _InfoLine(
+                      icon: Icons.schedule,
+                      text: pickupLabel(context, listing),
+                    ),
+                    if (!showBadges)
+                      _InfoLine(
+                        icon: Icons.inventory_2_outlined,
+                        text: '${listing.quantityAvailable} in stock',
+                      ),
+                    _InfoLine(
+                      icon: Icons.info_outline,
+                      text: 'Allergens: ${listing.allergenSummary}',
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                _InfoLine(
-                  icon: Icons.schedule,
-                  text: pickupLabel(context, listing),
-                ),
-                if (!showBadges)
-                  _InfoLine(
-                    icon: Icons.inventory_2_outlined,
-                    text: '${listing.quantityAvailable} in stock',
-                  ),
-                _InfoLine(
-                  icon: Icons.info_outline,
-                  text: 'Allergens: ${listing.allergenSummary}',
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
 
-    if (unlisted == null) {
-      if (onTap == null) return card;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          card,
-          Material(
+    final tapArea = onTap == null
+        ? null
+        : Material(
             type: MaterialType.transparency,
             child: InkWell(
               key: ValueKey('listing-card-${listing.id}'),
               borderRadius: BorderRadius.circular(AppRadius.lg),
               onTap: onTap,
             ),
-          ),
+          );
+
+    if (unlisted == null) {
+      if (tapArea == null && !relisted) return card;
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          card,
+          if (relisted)
+            Positioned(
+              key: const ValueKey('relisted-ribbon'),
+              top: AppSpacing.sm,
+              left: 0,
+              child: _Ribbon(
+                text: 'Relisted',
+                color: colors.primary,
+                fill: AppColors.page,
+              ),
+            ),
+          ?tapArea,
         ],
       );
     }
     return Stack(
       fit: StackFit.expand,
       children: [
-        Opacity(opacity: 0.7, child: card),
+        if (showRelist) card else Opacity(opacity: 0.7, child: card),
         Positioned(
           top: AppSpacing.sm,
           left: 0,
-          child: _Ribbon(
-            text: unlisted,
-            color: AppColors.endingSoon,
-            fill: AppColors.endingSoonPale,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Ribbon(
+                text: unlisted,
+                color: AppColors.endingSoon,
+                fill: AppColors.endingSoonPale,
+              ),
+              // Relisted while turned off: a second ribbon under the first.
+              if (relisted) ...[
+                const SizedBox(height: AppSpacing.xs),
+                KeyedSubtree(
+                  key: const ValueKey('relisted-ribbon'),
+                  child: _Ribbon(
+                    text: 'Relisted',
+                    color: colors.primary,
+                    fill: AppColors.page,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
+        if (!showRelist) ?tapArea,
       ],
     );
   }
+}
+
+// The greyed picture shows a green "Relist Now"; tapping the picture relists.
+Widget _withRelist(VoidCallback? onRelist, Widget picture) {
+  if (onRelist == null) return picture;
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      picture,
+      Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          key: const ValueKey('card-relist'),
+          onTap: onRelist,
+          child: Builder(
+            builder: (context) {
+              final theme = Theme.of(context);
+              final green = theme.colorScheme.primary;
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.replay, size: 32, color: green),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Relist Now',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: green,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _InfoLine extends StatelessWidget {

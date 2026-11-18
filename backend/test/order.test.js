@@ -331,6 +331,7 @@ test('a client cannot set soldCount when creating a listing', async () => {
   const token = signedInAs(makeUser('vendor'));
   const vendor = vendorDoc();
   mock.method(Vendor, 'findOne', async () => vendor);
+  mock.method(Listing, 'exists', async () => null);
   const create = mock.method(Listing, 'create', async (fields) => fields);
 
   const res = await call('POST', '/api/listings', token, {

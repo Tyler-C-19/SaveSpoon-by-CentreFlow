@@ -55,6 +55,7 @@ class Listing {
     this.createdAt,
     this.soldCount = 0,
     this.pickupAddress,
+    this.listedAt,
   });
 
   factory Listing.fromJson(Map<String, dynamic> json) => Listing(
@@ -80,6 +81,9 @@ class Listing {
         : DateTime.parse(json['createdAt'] as String).toLocal(),
     soldCount: json['soldCount'] as int? ?? 0,
     pickupAddress: json['pickupAddress'] as String?,
+    listedAt: json['listedAt'] == null
+        ? null
+        : DateTime.parse(json['listedAt'] as String).toLocal(),
   );
 
   final String id;
@@ -99,6 +103,8 @@ class Listing {
   final DateTime? createdAt;
   final int soldCount;
   final String? pickupAddress;
+  // When this round went on sale; relisting moves it forward.
+  final DateTime? listedAt;
 
   int get savePercent =>
       ((originalPrice - discountedPrice) / originalPrice * 100).round();
@@ -120,6 +126,7 @@ class Listing {
 
   String? unlistedLabelAt(DateTime time) {
     if (isAvailableAt(time)) return null;
+    if (isPaused && pickupEnd.isAfter(time)) return 'Unlisted - Turned Off';
     if (quantityAvailable <= 0 || status == 'sold_out') {
       return 'Unlisted - No Stock';
     }
@@ -129,6 +136,14 @@ class Listing {
 
   bool isAvailableAt(DateTime time) =>
       status == 'active' && quantityAvailable > 0 && pickupEnd.isAfter(time);
+
+  bool get isPaused => status == 'paused';
+
+  // Stock and the on/off switch can change only until pickup ends.
+  bool canChangeAt(DateTime time) =>
+      (status == 'active' || isPaused) && pickupEnd.isAfter(time);
+
+  bool canRelistAt(DateTime time) => !pickupEnd.isAfter(time);
 
   bool get isLowStock =>
       quantityAvailable > 0 &&

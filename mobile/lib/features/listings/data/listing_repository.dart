@@ -30,6 +30,25 @@ class SearchResults {
   final List<Listing> otherStalls;
 }
 
+// A vendor's own listing plus the items sold in its earlier rounds.
+class OwnListing {
+  const OwnListing({required this.listing, required this.pastSold});
+
+  final Listing listing;
+  final int pastSold;
+
+  int get totalSold => pastSold + listing.soldCount;
+}
+
+class StockChangedException implements Exception {
+  const StockChangedException(this.message, this.current);
+
+  static const String code = 'STOCK_CHANGED';
+
+  final String message;
+  final Listing current;
+}
+
 class ListingRepository {
   ListingRepository(this.api);
 
@@ -104,6 +123,60 @@ class ListingRepository {
       for (final item in data['listings'] as List)
         Listing.fromJson(item as Map<String, dynamic>),
     ];
+  }
+
+  OwnListing _ownListing(dynamic data) => OwnListing(
+    listing: Listing.fromJson(data['listing'] as Map<String, dynamic>),
+    pastSold: data['pastSold'] as int? ?? 0,
+  );
+
+  Future<OwnListing> fetchMineOne(String id) async =>
+      _ownListing(await api.get('/api/listings/mine/$id'));
+
+  // Saves the finished round on the server and puts the listing back on sale.
+  Future<OwnListing> relist({
+    required String id,
+    required int quantityAvailable,
+    required DateTime pickupStart,
+    required DateTime pickupEnd,
+    bool paused = false,
+  }) async => _ownListing(
+    await api.post(
+      '/api/listings/$id/relist',
+      body: {
+        'quantityAvailable': quantityAvailable,
+        'pickupStart': pickupStart.toUtc().toIso8601String(),
+        'pickupEnd': pickupEnd.toUtc().toIso8601String(),
+        'paused': paused,
+      },
+    ),
+  );
+
+  // Sets stock only if it still equals expectedQuantity on the server;
+  // otherwise throws StockChangedException with the listing as it is now.
+  Future<Listing> updateStock({
+    required String id,
+    required int quantity,
+    required int expectedQuantity,
+  }) async {
+    try {
+      final data = await api.patch(
+        '/api/listings/$id/stock',
+        body: {'quantity': quantity, 'expectedQuantity': expectedQuantity},
+      );
+      return Listing.fromJson(data['listing'] as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.code != StockChangedException.code) rethrow;
+      throw StockChangedException(e.message, (await fetchMineOne(id)).listing);
+    }
+  }
+
+  Future<Listing> setPaused(String id, {required bool paused}) async {
+    final data = await api.patch(
+      '/api/listings/$id/availability',
+      body: {'paused': paused},
+    );
+    return Listing.fromJson(data['listing'] as Map<String, dynamic>);
   }
 
   Future<AllergenSuggestion> suggestAllergens({

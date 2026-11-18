@@ -69,4 +69,30 @@ function listingError(body = {}, now = new Date()) {
     || otherAllergensError(body.otherAllergens);
 }
 
-module.exports = { listingError, titleError };
+const MAX_STOCK = 999;
+const isStock = (value) => Number.isInteger(value) && value >= 0 && value <= MAX_STOCK;
+
+function stockChangeError(body = {}) {
+  if (!isStock(body.quantity)) return `Stock must be a whole number from 0 to ${MAX_STOCK}.`;
+  if (!Number.isInteger(body.expectedQuantity) || body.expectedQuantity < 0) {
+    return 'Reload the listing and try again.';
+  }
+  return null;
+}
+
+const availabilityError = (body = {}) =>
+  typeof body.paused !== 'boolean' ? 'Say whether the listing is turned on or off.' : null;
+
+// Relisting takes new stock and pickup times only, under the same rules as creating.
+function relistError(body = {}, now = new Date()) {
+  const { quantityAvailable } = body;
+  if (!Number.isInteger(quantityAvailable) || quantityAvailable < 1 || quantityAvailable > MAX_STOCK) {
+    return `Stock must be a whole number from 1 to ${MAX_STOCK}.`;
+  }
+  if (body.paused !== undefined && typeof body.paused !== 'boolean') {
+    return 'Say whether the listing is turned on or off.';
+  }
+  return pickupError(body.pickupStart, body.pickupEnd, now);
+}
+
+module.exports = { listingError, titleError, stockChangeError, availabilityError, relistError };

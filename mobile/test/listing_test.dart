@@ -277,13 +277,13 @@ void main() {
         tester,
         (_) async => jsonResponse({
           'listings': [
-            _listingJson(id: 'l2', title: 'Newest', allergens: ['egg']),
+            _listingJson(id: 'l2', title: 'Newer', allergens: ['egg']),
             _listingJson(title: 'Older'),
           ],
         }),
       );
 
-      final newest = tester.getTopLeft(find.text('Newest'));
+      final newest = tester.getTopLeft(find.text('Newer'));
       final older = tester.getTopLeft(find.text('Older'));
       expect(newest.dx, lessThan(older.dx));
       expect(find.text('RM 4.50'), findsNWidgets(2));

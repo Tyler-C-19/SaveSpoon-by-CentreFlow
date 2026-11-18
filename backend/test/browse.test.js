@@ -99,7 +99,8 @@ test('browse sorts newest first and asks for one extra to detect more pages', as
   await call('/api/listings', token);
 
   const pipeline = aggregate.mock.calls[0].arguments[0];
-  assert.deepEqual(stage(pipeline, '$sort'), { createdAt: -1, _id: -1 });
+  assert.deepEqual(stage(pipeline, '$sort'), { _listedAt: -1, _id: -1 });
+  assert.deepEqual(stage(pipeline, '$addFields'), { _listedAt: { $ifNull: ['$listedAt', '$createdAt'] } });
   assert.equal(stage(pipeline, '$skip'), 0);
   assert.equal(stage(pipeline, '$limit'), 21);
 });

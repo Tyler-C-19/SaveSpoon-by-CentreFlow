@@ -19,7 +19,9 @@ import '../../features/home/presentation/widgets/role_shell.dart';
 import '../../features/listings/domain/listing.dart';
 import '../../features/listings/presentation/pages/add_listing_page.dart';
 import '../../features/listings/presentation/pages/food_details_page.dart';
+import '../../features/listings/presentation/pages/relist_page.dart';
 import '../../features/listings/presentation/pages/search_page.dart';
+import '../../features/listings/presentation/pages/vendor_listing_page.dart';
 import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/listings/presentation/providers/listing_changes.dart';
 import '../../features/orders/domain/order.dart';
@@ -52,6 +54,8 @@ abstract final class AppRoutes {
   static const String vendorHome = '/vendor/home';
   static const String vendorListings = '/vendor/listings';
   static const String vendorAddListing = '/vendor/listings/new';
+  static const String vendorListing = '/vendor/listings/:id';
+  static const String vendorRelist = '/vendor/listings/:id/relist';
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
   static const String vendorBusinessEdit = '/vendor/profile/business';
@@ -60,6 +64,10 @@ abstract final class AppRoutes {
   static String profilePasswordFor(String role) => '/$role/profile/password';
 
   static String foodDetailsFor(String id) => '/customer/food/$id';
+
+  static String vendorListingFor(String id) => '/vendor/listings/$id';
+
+  static String vendorRelistFor(String id) => '/vendor/listings/$id/relist';
 
   static String homeFor(String? role) =>
       role == 'vendor' ? vendorHome : customerHome;
@@ -130,6 +138,17 @@ void _replaceWithConfirmation(BuildContext context, List<Order> orders) {
   context.pushReplacement(AppRoutes.orderConfirmation, extra: orders);
 }
 
+Future<Listing?> _openListing(BuildContext context, Listing listing) async {
+  await context.push<void>(
+    AppRoutes.vendorListingFor(listing.id),
+    extra: listing,
+  );
+  return null;
+}
+
+Future<Listing?> _relist(BuildContext context, Listing listing) => context
+    .push<Listing>(AppRoutes.vendorRelistFor(listing.id), extra: listing);
+
 Future<String> _addToCart(BuildContext context, String id, int quantity) =>
     context.read<CartProvider>().addItem(id, quantity);
 
@@ -193,8 +212,32 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
     ),
     GoRoute(
       path: AppRoutes.vendorAddListing,
-      pageBuilder: (context, state) =>
-          _slideInPage<Listing>(state, const AddListingPage()),
+      pageBuilder: (context, state) => _slideInPage<Listing>(
+        state,
+        AddListingPage(
+          existing: state.extra as List<Listing>? ?? const [],
+          onOpenExisting: _openListing,
+          onRelistExisting: _relist,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.vendorRelist,
+      pageBuilder: (context, state) => _slideInPage<Listing>(
+        state,
+        RelistPage(listing: state.extra as Listing),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.vendorListing,
+      pageBuilder: (context, state) => _slideInPage<void>(
+        state,
+        VendorListingPage(
+          listingId: state.pathParameters['id']!,
+          initial: state.extra as Listing?,
+          onRelist: _relist,
+        ),
+      ),
     ),
     for (final role in ['customer', 'vendor']) ...[
       GoRoute(
