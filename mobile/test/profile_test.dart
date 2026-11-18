@@ -71,6 +71,7 @@ class FakeServer {
   final bool hasPassword;
   final bool isGoogleLinked;
   bool photoUploads = true;
+  bool profileDown = false;
   String? lockedUntil;
   Map<String, dynamic> photo = {};
   Map<String, dynamic> summary;
@@ -102,6 +103,7 @@ class FakeServer {
     if (path == '/api/auth/me') return jsonResponse({'user': user});
     if (path == '/api/users/me/summary') return jsonResponse(summary);
     if (path == '/api/users/me' && request.method == 'GET') {
+      if (profileDown) return http.Response('<html>Unavailable</html>', 503);
       return jsonResponse({'user': profile});
     }
     if (path == '/api/users/me' && request.method == 'PATCH') {
@@ -866,6 +868,26 @@ void main() {
         findsOneWidget,
       );
     });
+
+    testWidgets(
+      'with the server down, the email shows in its box but cannot be edited',
+      (tester) async {
+        final server = FakeServer();
+        await openProfile(tester, server);
+        server.profileDown = true;
+        await tester.tap(find.byTooltip('Edit account details'));
+        await tester.pumpAndSettle();
+
+        final email = tester.widget<TextFormField>(field('Email'));
+        expect(email.enabled, isFalse);
+        expect(email.initialValue, 'person@example.com');
+        expect(find.text(EditDetailsPage.emailOfflineNote), findsOneWidget);
+        expect(
+          tester.widget<TextFormField>(field('Full name')).enabled,
+          isTrue,
+        );
+      },
+    );
   });
 
   group('AC4 change password', () {

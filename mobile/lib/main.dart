@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'core/network/api_client.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/server_wake_banner.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/data/google_auth_service.dart';
 import 'features/auth/data/token_storage.dart';
@@ -54,6 +55,7 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
       tokenReader: storage.readToken,
       onUnauthorized: _auth.handleSessionExpired,
     );
+    _api.wakeUp();
     _cart = CartProvider(CartRepository(_api));
     _auth.addListener(_resetCartAfterLogout);
     _auth.attach(
@@ -97,6 +99,10 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         routerConfig: _router,
+        builder: (context, child) => ServerWakeBanner(
+          serverWait: _api.serverWait,
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }

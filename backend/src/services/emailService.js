@@ -167,6 +167,11 @@ async function sendEmailChangedEmail(to, name, newEmail) {
   await send(to, buildEmailChangedEmail(name, newEmail));
 }
 
+async function sendAlertEmail(to, subject, text) {
+  await send(to, { subject, text });
+}
+
 module.exports = {
   sendOtpEmail, buildOtpEmail, sendPasswordChangedEmail, buildPasswordChangedEmail, sendEmailChangedEmail, buildEmailChangedEmail,
+  sendAlertEmail,
 };

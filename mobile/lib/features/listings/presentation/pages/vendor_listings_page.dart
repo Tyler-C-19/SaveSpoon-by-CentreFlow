@@ -6,6 +6,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/auto_refresh.dart';
+import '../../../../core/widgets/load_error.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/add_listing_button.dart';
@@ -79,16 +80,7 @@ class _VendorListingsPageState extends State<VendorListingsPage>
 
   Widget _body(BuildContext context) {
     if (_error != null) {
-      return _scrollable(
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(onPressed: _load, child: const Text('Try again')),
-          ],
-        ),
-      );
+      return _scrollable(LoadError(message: _error!, onRetry: _load));
     }
     final listings = _listings;
     if (listings == null) {

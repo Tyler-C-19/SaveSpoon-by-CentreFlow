@@ -72,6 +72,9 @@ Future<void> startApp(
     SaveSpoonApp(
       storage: storage,
       httpClient: MockClient((request) async {
+        if (request.url.path == '/api/health') {
+          return jsonResponse({'status': 'ok'});
+        }
         const browsePaths = {'/api/listings', '/api/listings/running-out'};
         if (stubBrowse && request.method == 'GET') {
           if (browsePaths.contains(request.url.path)) {
