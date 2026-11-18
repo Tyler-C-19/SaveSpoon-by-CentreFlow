@@ -9,6 +9,7 @@ const User = require('../src/models/User');
 const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const SalesRecord = require('../src/models/SalesRecord');
+const Order = require('../src/models/Order');
 const { signToken } = require('../src/services/tokenService');
 const { relistError } = require('../src/validators/listingValidators');
 const { call } = require('./testServer');
@@ -58,6 +59,7 @@ function ownListing(listing, { pastSold = 0 } = {}) {
   mock.method(Vendor, 'findOne', async () => vendor);
   mock.method(Listing, 'findOne', async () => listing);
   const aggregate = mock.method(SalesRecord, 'aggregate', async () => (pastSold ? [{ sold: pastSold }] : []));
+  mock.method(Order, 'countDocuments', async () => 0);
   return { token, aggregate };
 }
 

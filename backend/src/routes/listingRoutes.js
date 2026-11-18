@@ -13,6 +13,8 @@ router.get('/mine/:id', requireRole('vendor'), listings.getMineOne);
 router.patch('/:id/stock', requireRole('vendor'), listings.updateStock);
 router.patch('/:id/availability', requireRole('vendor'), listings.updateAvailability);
 router.post('/:id/relist', requireRole('vendor'), listings.relist);
+router.patch('/:id', requireRole('vendor'), listings.updateListing);
+router.delete('/:id', requireRole('vendor'), listings.deleteListing);
 router.post('/allergen-suggestions', requireRole('vendor'), listings.suggestAllergens);
 router.get('/:id', requireRole('customer'), listings.getDetails);
 

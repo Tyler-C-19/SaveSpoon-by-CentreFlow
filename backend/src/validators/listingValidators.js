@@ -80,6 +80,13 @@ function stockChangeError(body = {}) {
   return null;
 }
 
+// Editing follows the create rules, except stock may be 0.
+function listingEditError(body = {}, now = new Date()) {
+  const invalid = listingError({ ...body, quantityAvailable: 1 }, now);
+  if (invalid) return invalid;
+  return stockChangeError({ quantity: body.quantityAvailable, expectedQuantity: body.expectedQuantity });
+}
+
 const availabilityError = (body = {}) =>
   typeof body.paused !== 'boolean' ? 'Say whether the listing is turned on or off.' : null;
 
@@ -95,4 +102,4 @@ function relistError(body = {}, now = new Date()) {
   return pickupError(body.pickupStart, body.pickupEnd, now);
 }
 
-module.exports = { listingError, titleError, stockChangeError, availabilityError, relistError };
+module.exports = { listingError, listingEditError, titleError, stockChangeError, availabilityError, relistError };

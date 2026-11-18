@@ -6,6 +6,7 @@ const { descriptionError } = require('../validators/vendorValidators');
 const mongoose = require('mongoose');
 const {
   listingError,
+  listingEditError,
   titleError,
   stockChangeError,
   availabilityError,
@@ -15,6 +16,7 @@ const SalesRecord = require('../models/SalesRecord');
 const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
+const { countActiveOrders } = require('../services/accountService');
 
 const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
 
@@ -302,7 +304,11 @@ async function pastSoldFor(listingId) {
 async function getMineOne(req, res) {
   const found = await findOwnListing(req, res);
   if (!found) return undefined;
-  return res.json({ listing: found.listing, pastSold: await pastSoldFor(found.listing._id) });
+  const [pastSold, activeOrderCount] = await Promise.all([
+    pastSoldFor(found.listing._id),
+    countActiveOrders({ listing: found.listing._id }),
+  ]);
+  return res.json({ listing: found.listing, pastSold, activeOrderCount });
 }
 
 function stockChanged(expected, current) {
@@ -434,6 +440,121 @@ async function relist(req, res) {
   return res.json({ listing: relisted, pastSold: await pastSoldFor(listing._id) });
 }
 
+const PICKUP_LOCKED = { code: 'PICKUP_LOCKED', error: "Pickup time can't change while you have active orders." };
+const sameTime = (a, b) => new Date(a).getTime() === new Date(b).getTime();
+
+async function updateListing(req, res) {
+  const found = await findOwnListing(req, res);
+  if (!found) return undefined;
+  const { listing, vendor } = found;
+  const now = new Date();
+  if (listing.pickupEnd <= now || !EDITABLE_STATUSES.includes(listing.status)) {
+    return res.status(409).json(PICKUP_OVER);
+  }
+
+  const invalid = listingEditError(req.body, now);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const { title, description, category, isHalal, originalPrice, discountedPrice } = req.body;
+  const sameName = await Listing.exists({
+    _id: { $ne: listing._id },
+    vendor: vendor._id,
+    title: sameNamePattern(title),
+  });
+  if (sameName) {
+    return res.status(409).json({
+      code: SAME_NAME,
+      listingId: String(sameName._id),
+      error: `You already have a listing called ${title.trim()}.`,
+    });
+  }
+
+  const pickupStart = new Date(req.body.pickupStart);
+  const pickupEnd = new Date(req.body.pickupEnd);
+  const windowChanged = !sameTime(pickupStart, listing.pickupStart) || !sameTime(pickupEnd, listing.pickupEnd);
+  if (windowChanged && (await countActiveOrders({ listing: listing._id }))) {
+    return res.status(409).json(PICKUP_LOCKED);
+  }
+
+  const changes = {
+    title: title.trim(),
+    category,
+    isHalal,
+    originalPrice,
+    discountedPrice,
+    pickupStart,
+    pickupEnd,
+    ...normaliseAllergens(req.body.allergens, req.body.otherAllergens),
+  };
+  const text = description?.trim();
+  if (text) changes.description = text;
+  const update = text ? { $set: changes } : { $set: changes, $unset: { description: '' } };
+
+  // Stock is only touched when the vendor changed it, and only if no order changed it meanwhile.
+  const { quantityAvailable, expectedQuantity } = req.body;
+  const filter = { _id: listing._id, status: { $in: EDITABLE_STATUSES }, pickupEnd: { $gt: now } };
+  if (quantityAvailable !== expectedQuantity) {
+    filter.quantityAvailable = expectedQuantity;
+    changes.quantityAvailable = quantityAvailable;
+  }
+
+  const updated = await Listing.findOneAndUpdate(filter, update, { returnDocument: 'after' });
+  if (updated) return res.json({ listing: updated });
+
+  const current = await Listing.findById(listing._id);
+  if (!current) return res.status(404).json(LISTING_NOT_FOUND);
+  if (current.pickupEnd <= now || !EDITABLE_STATUSES.includes(current.status)) {
+    return res.status(409).json(PICKUP_OVER);
+  }
+  return res.status(409).json(stockChanged(expectedQuantity, current.quantityAvailable));
+}
+
+// The current round up to now, kept when the listing is deleted.
+function deletionRecordFrom(listing, vendor, now) {
+  const record = salesRecordFrom(listing, vendor);
+  const pickupEnd = listing.pickupEnd < now ? listing.pickupEnd : now;
+  return {
+    ...record,
+    pickupStart: listing.pickupStart < pickupEnd ? listing.pickupStart : pickupEnd,
+    pickupEnd,
+    reason: 'deleted',
+  };
+}
+
+async function deleteListing(req, res) {
+  const found = await findOwnListing(req, res);
+  if (!found) return undefined;
+  const { listing, vendor } = found;
+
+  const activeOrderCount = await countActiveOrders({ listing: listing._id });
+  if (activeOrderCount) {
+    const orders = activeOrderCount === 1 ? '1 active order' : `${activeOrderCount} active orders`;
+    return res.status(409).json({
+      code: 'ACTIVE_ORDERS',
+      activeOrderCount,
+      pickupEnd: listing.pickupEnd,
+      error: `You have ${orders} for this item. You can delete it once pickup ends.`,
+    });
+  }
+
+  const record = deletionRecordFrom(listing, vendor, new Date());
+  const saved = record.stockOffered > 0 ? await SalesRecord.create(record) : null;
+  const undoRecord = () => (saved ? SalesRecord.deleteOne({ _id: saved._id }) : null);
+
+  let result;
+  try {
+    result = await Listing.deleteOne({ _id: listing._id, vendor: vendor._id });
+  } catch (err) {
+    await undoRecord();
+    throw err;
+  }
+  if (!result.deletedCount) {
+    await undoRecord();
+    return res.status(404).json(LISTING_NOT_FOUND);
+  }
+  return res.json({ deleted: true, listingId: String(listing._id) });
+}
+
 async function suggestAllergens(req, res) {
   const { title, description } = req.body ?? {};
   const invalid = titleError(title) || descriptionError(description);
@@ -466,5 +587,7 @@ module.exports = {
   updateStock,
   updateAvailability,
   relist,
+  updateListing,
+  deleteListing,
   suggestAllergens,
 };
