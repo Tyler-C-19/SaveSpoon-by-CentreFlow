@@ -13,6 +13,8 @@ import '../../domain/listing_validators.dart';
 import '../../domain/pickup_times.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/category_picker.dart';
+import '../widgets/active_orders_note.dart';
+import '../widgets/stock_changed_dialog.dart';
 
 typedef TimePicker = Future<TimeOfDay?> Function(
   BuildContext context,
@@ -42,8 +44,14 @@ class AddListingPage extends StatefulWidget {
     this.existing = const [],
     this.onOpenExisting = _openNothing,
     this.onRelistExisting = _openNothing,
+    this.editing,
+    this.onViewOrders,
   });
 
+  // Edits this listing instead of adding a new one.
+  final Listing? editing;
+  // Opens the vendor's Orders tab from the locked pickup time note.
+  final void Function(BuildContext context)? onViewOrders;
   final TimePicker timePicker;
   final DateTime Function() now;
   // The vendor's listings, checked for the same name before saving.
@@ -82,14 +90,136 @@ class _AddListingPageState extends State<AddListingPage> {
   String? _aiError;
   String? _error;
 
+  // Edit mode only.
+  late int _expectedStock = widget.editing?.quantityAvailable ?? 0;
+  int _activeOrders = 0;
+  String _initial = '';
+
+  bool get _isEditing => widget.editing != null;
+
+  // The vendor's other listings, checked for the same name.
+  late List<Listing> _names = [
+    for (final listing in widget.existing)
+      if (listing.id != widget.editing?.id) listing,
+  ];
+
   @override
   void initState() {
     super.initState();
-    final start = PickupTimes.defaultStart(widget.now());
-    _start = TimeOfDay.fromDateTime(start);
-    _end = TimeOfDay.fromDateTime(PickupTimes.defaultEnd(start));
+    final editing = widget.editing;
+    if (editing == null) {
+      final start = PickupTimes.defaultStart(widget.now());
+      _start = TimeOfDay.fromDateTime(start);
+      _end = TimeOfDay.fromDateTime(PickupTimes.defaultEnd(start));
+    } else {
+      _fill(editing);
+      _initial = _snapshot();
+      for (final field in [
+        _title,
+        _description,
+        _originalPrice,
+        _discountedPrice,
+        _stock,
+        _otherAllergens,
+      ]) {
+        field.addListener(_edited);
+      }
+      _loadForEdit(editing.id);
+    }
     // Rebuild as the name changes so a same-item note can show straight away.
     _title.addListener(_nameChanged);
+  }
+
+  void _fill(Listing listing) {
+    _title.text = listing.title;
+    _description.text = listing.description ?? '';
+    _originalPrice.text = listing.originalPrice.toStringAsFixed(2);
+    _discountedPrice.text = listing.discountedPrice.toStringAsFixed(2);
+    _stock.text = '${listing.quantityAvailable}';
+    _category = listing.category;
+    _isHalal = listing.isHalal;
+    _allergens.addAll(listing.allergens);
+    _otherAllergens.text = listing.otherAllergens.join(', ');
+    _start = TimeOfDay.fromDateTime(listing.pickupStart);
+    _end = TimeOfDay.fromDateTime(listing.pickupEnd);
+  }
+
+  // Active orders lock the pickup time; the vendor's other names feed the
+  // same-item check. The server checks both again on save.
+  Future<void> _loadForEdit(String id) async {
+    final repository = context.read<ListingRepository>();
+    try {
+      final own = await repository.fetchMineOne(id);
+      if (mounted) setState(() => _activeOrders = own.activeOrderCount);
+    } on ApiException {
+      // Saving still reports a locked pickup time.
+    }
+    if (widget.existing.isNotEmpty) return;
+    try {
+      final mine = await repository.fetchMine();
+      if (!mounted) return;
+      _names = [
+        for (final listing in mine)
+          if (listing.id != id) listing,
+      ];
+      _nameChanged();
+    } on ApiException {
+      // The server still refuses a same name.
+    }
+  }
+
+  void _edited() => setState(() {});
+
+  // Everything the vendor can change, so Save Changes can tell if anything did.
+  String _snapshot() => [
+    _title.text.trim(),
+    _description.text.trim(),
+    _category,
+    _isHalal,
+    double.tryParse(_originalPrice.text.trim()) ?? _originalPrice.text,
+    double.tryParse(_discountedPrice.text.trim()) ?? _discountedPrice.text,
+    int.tryParse(_stock.text.trim()) ?? _stock.text,
+    _minutes(_start),
+    _minutes(_end),
+    (_allergens.toList()..sort()).join(','),
+    [
+      for (final item in ListingValidators.splitOtherAllergens(
+        _otherAllergens.text,
+      ))
+        item.toLowerCase(),
+    ].join(','),
+  ].join('\n');
+
+  static int _minutes(TimeOfDay time) => time.hour * 60 + time.minute;
+
+  bool get _dirty => _snapshot() != _initial;
+
+  bool get _windowLocked => _isEditing && _activeOrders > 0;
+
+  bool get _halalChanged => _isEditing && _isHalal != widget.editing!.isHalal;
+
+  bool get _allergensChanged {
+    final editing = widget.editing;
+    if (editing == null) return false;
+    final before = {
+      ...editing.allergens,
+      for (final item in editing.otherAllergens) item.toLowerCase(),
+    };
+    final now = {
+      ..._allergens,
+      for (final item in ListingValidators.splitOtherAllergens(
+        _otherAllergens.text,
+      ))
+        item.toLowerCase(),
+    };
+    return before.length != now.length || !before.containsAll(now);
+  }
+
+  static String? _editStockError(String? value) {
+    final amount = int.tryParse(value?.trim() ?? '');
+    return amount == null || amount < 0 || amount > 999
+        ? 'Enter a whole number from 0 to 999.'
+        : null;
   }
 
   Listing? _shownSameName;
@@ -234,7 +364,7 @@ class _AddListingPageState extends State<AddListingPage> {
 
   Listing? _sameNameListing() {
     final key = _nameKey(_title.text);
-    for (final listing in widget.existing) {
+    for (final listing in _names) {
       if (_nameKey(listing.title) == key) return listing;
     }
     return null;
@@ -248,7 +378,7 @@ class _AddListingPageState extends State<AddListingPage> {
       return;
     }
     final relisted = await widget.onRelistExisting(context, existing);
-    if (relisted != null && mounted) context.pop(relisted);
+    if (relisted != null && mounted && !_isEditing) context.pop(relisted);
   }
 
   // Same names aren't allowed, so the only ways on are the existing listing
@@ -311,12 +441,14 @@ class _AddListingPageState extends State<AddListingPage> {
       if (!mounted || open == null) return;
       if (open) {
         await _openSameName(sameName);
-      } else {
-        // Cancel goes back to where the vendor came from.
+      } else if (!_isEditing) {
+        // Cancel goes back to where the vendor came from; an edit keeps the form.
         context.pop();
       }
       return;
     }
+
+    if (_isEditing) return _saveEdit();
 
     setState(() => _isSaving = true);
     final now = widget.now();
@@ -344,6 +476,86 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
+  Future<void> _saveEdit() async {
+    final editing = widget.editing!;
+    final now = widget.now();
+    // An untouched window is sent exactly as it was, so it doesn't count as moved.
+    final sameWindow =
+        _start == TimeOfDay.fromDateTime(editing.pickupStart) &&
+        _end == TimeOfDay.fromDateTime(editing.pickupEnd);
+    final stock = int.parse(_stock.text.trim());
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      final listing = await context.read<ListingRepository>().update(
+        id: editing.id,
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        category: _category!,
+        isHalal: _isHalal!,
+        originalPrice: double.parse(_originalPrice.text.trim()),
+        discountedPrice: double.parse(_discountedPrice.text.trim()),
+        quantityAvailable: stock,
+        expectedQuantity: _expectedStock,
+        pickupStart: sameWindow ? editing.pickupStart : _onDay(now, _start),
+        pickupEnd: sameWindow ? editing.pickupEnd : _onDay(now, _end),
+        allergens: _allergens.toList(),
+        otherAllergens: ListingValidators.splitOtherAllergens(
+          _otherAllergens.text,
+        ),
+      );
+      if (mounted) context.pop(listing);
+    } on StockChangedException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      final current = e.current.quantityAvailable;
+      final setAnyway = await askAboutStockChange(
+        context,
+        message: e.message,
+        current: current,
+        wanted: stock,
+      );
+      if (!mounted) return;
+      _expectedStock = current;
+      if (setAnyway != true) _stock.text = '$current';
+      await _saveEdit();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        if (e.code == 'PICKUP_LOCKED') {
+          _activeOrders = _activeOrders > 0 ? _activeOrders : 1;
+          _start = TimeOfDay.fromDateTime(editing.pickupStart);
+          _end = TimeOfDay.fromDateTime(editing.pickupEnd);
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  // An amber note for changes that customers who already ordered won't hear about.
+  Widget _orderedNote() => Padding(
+    key: const ValueKey('ordered-note'),
+    padding: const EdgeInsets.only(top: AppSpacing.sm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline, size: 16, color: AppColors.onWarning),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            "Customers who already ordered aren't told about this change.",
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.onWarning),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _heading(String text) => Padding(
     padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.sm),
     child: Text(text, style: Theme.of(context).textTheme.titleMedium),
@@ -360,16 +572,55 @@ class _AddListingPageState extends State<AddListingPage> {
     );
   }
 
+  // Leaving drops unsaved edits, so ask first. [leaveLabel] names where to.
+  Future<bool> _mayLeave(String leaveLabel) async {
+    if (!_dirty) return true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave without saving?'),
+        content: const Text("Your changes to this listing won't be saved."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep Editing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(leaveLabel),
+          ),
+        ],
+      ),
+    );
+    return leave == true && mounted;
+  }
+
+  Future<void> _viewOrders() async {
+    if (await _mayLeave('View Orders') && mounted) {
+      widget.onViewOrders!(context);
+    }
+  }
+
+  Future<void> _back() async {
+    if (await _mayLeave('Back') && mounted) Navigator.of(context).pop();
+  }
+
   Widget _timeField(String label, TimeOfDay time, {required bool isStart}) {
     return InkWell(
       borderRadius: BorderRadius.circular(AppRadius.lg),
-      onTap: () => _chooseTime(isStart: isStart),
+      onTap: _windowLocked ? null : () => _chooseTime(isStart: isStart),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: const Icon(Icons.schedule),
+          prefixIcon: Icon(_windowLocked ? Icons.lock_outline : Icons.schedule),
+          enabled: !_windowLocked,
         ),
-        child: Text(time.format(context)),
+        child: Text(
+          time.format(context),
+          style: _windowLocked
+              ? TextStyle(color: Theme.of(context).disabledColor)
+              : null,
+        ),
       ),
     );
   }
@@ -380,7 +631,9 @@ class _AddListingPageState extends State<AddListingPage> {
     const sideGap = SizedBox(width: AppSpacing.sm);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add a Listing')),
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Edit Listing' : 'Add a Listing'),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -389,6 +642,14 @@ class _AddListingPageState extends State<AddListingPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Back (app bar or phone) asks first while edits are unsaved.
+                PopScope<Object?>(
+                  canPop: !_isEditing || !_dirty,
+                  onPopInvokedWithResult: (didPop, result) {
+                    if (!didPop) _back();
+                  },
+                  child: const SizedBox.shrink(),
+                ),
                 AppTextField(
                   label: 'Item name',
                   icon: Icons.fastfood_outlined,
@@ -427,6 +688,7 @@ class _AddListingPageState extends State<AddListingPage> {
                   ),
                 ),
                 _fieldError(_isHalal == null ? 'Choose Yes or No.' : null),
+                if (_activeOrders > 0 && _halalChanged) _orderedNote(),
                 _heading('Price and stock'),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,7 +725,9 @@ class _AddListingPageState extends State<AddListingPage> {
                   icon: Icons.inventory_2_outlined,
                   controller: _stock,
                   keyboardType: TextInputType.number,
-                  validator: ListingValidators.stock,
+                  validator: _isEditing
+                      ? _editStockError
+                      : ListingValidators.stock,
                 ),
                 _heading('Pickup time today'),
                 Row(
@@ -485,6 +749,14 @@ class _AddListingPageState extends State<AddListingPage> {
                   )
                 else
                   _fieldError(_pickupError),
+                if (_windowLocked)
+                  ActiveOrdersNote(
+                    key: const ValueKey('pickup-locked'),
+                    count: _activeOrders,
+                    onViewOrders: widget.onViewOrders == null
+                        ? null
+                        : _viewOrders,
+                  ),
                 const SizedBox(height: AppSpacing.lg),
                 AllergenPicker(
                   selected: _allergens,
@@ -512,12 +784,13 @@ class _AddListingPageState extends State<AddListingPage> {
                       ? 'Tick the box to confirm the allergens.'
                       : null,
                 ),
+                if (_activeOrders > 0 && _allergensChanged) _orderedNote(),
                 const SizedBox(height: AppSpacing.lg),
                 ErrorText(_error),
                 AppButton(
-                  label: 'Save Listing',
+                  label: _isEditing ? 'Save Changes' : 'Save Listing',
                   isLoading: _isSaving,
-                  onPressed: _submit,
+                  onPressed: _isEditing && !_dirty ? null : _submit,
                 ),
               ],
             ),
