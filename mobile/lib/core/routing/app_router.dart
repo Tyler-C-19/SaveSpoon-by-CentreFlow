@@ -56,6 +56,7 @@ abstract final class AppRoutes {
   static const String vendorAddListing = '/vendor/listings/new';
   static const String vendorListing = '/vendor/listings/:id';
   static const String vendorRelist = '/vendor/listings/:id/relist';
+  static const String vendorEditListing = '/vendor/listings/:id/edit';
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
   static const String vendorBusinessEdit = '/vendor/profile/business';
@@ -68,6 +69,8 @@ abstract final class AppRoutes {
   static String vendorListingFor(String id) => '/vendor/listings/$id';
 
   static String vendorRelistFor(String id) => '/vendor/listings/$id/relist';
+
+  static String vendorEditListingFor(String id) => '/vendor/listings/$id/edit';
 
   static String homeFor(String? role) =>
       role == 'vendor' ? vendorHome : customerHome;
@@ -149,6 +152,9 @@ Future<Listing?> _openListing(BuildContext context, Listing listing) async {
 Future<Listing?> _relist(BuildContext context, Listing listing) => context
     .push<Listing>(AppRoutes.vendorRelistFor(listing.id), extra: listing);
 
+Future<Listing?> _editListing(BuildContext context, Listing listing) => context
+    .push<Listing>(AppRoutes.vendorEditListingFor(listing.id), extra: listing);
+
 Future<String> _addToCart(BuildContext context, String id, int quantity) =>
     context.read<CartProvider>().addItem(id, quantity);
 
@@ -229,6 +235,18 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
       ),
     ),
     GoRoute(
+      path: AppRoutes.vendorEditListing,
+      pageBuilder: (context, state) => _slideInPage<Listing>(
+        state,
+        AddListingPage(
+          editing: state.extra as Listing,
+          onViewOrders: (context) => context.go(AppRoutes.vendorOrders),
+          onOpenExisting: _openListing,
+          onRelistExisting: _relist,
+        ),
+      ),
+    ),
+    GoRoute(
       path: AppRoutes.vendorListing,
       pageBuilder: (context, state) => _slideInPage<void>(
         state,
@@ -236,6 +254,8 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
           listingId: state.pathParameters['id']!,
           initial: state.extra as Listing?,
           onRelist: _relist,
+          onEdit: _editListing,
+          onViewOrders: (context) => context.go(AppRoutes.vendorOrders),
         ),
       ),
     ),
