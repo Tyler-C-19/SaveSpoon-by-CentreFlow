@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -113,6 +115,126 @@ void main() {
         ),
       ),
     );
+  });
+
+  test(
+    'cancelOrder sends the reason and reads cancelled and skipped',
+    () async {
+      final repository = repositoryAnswering({
+        'cancelled': [orderJson(id: 'a', status: 'cancelled')],
+        'skipped': [orderJson(id: 'b')],
+      });
+
+      final result = await repository.cancelOrder(
+        'a',
+        reason: CancelReason.cannotMakePickup,
+        wholeCheckout: true,
+      );
+
+      expect(requests.single.method, 'POST');
+      expect(requests.single.url.path, '/api/orders/a/cancel');
+      expect(jsonDecode(requests.single.body), {
+        'reason': 'cannot_make_pickup',
+        'wholeCheckout': true,
+      });
+      expect(result.cancelled.single.status, 'cancelled');
+      expect(result.skipped.single.id, 'b');
+    },
+  );
+
+  test('cancelOrder leaves out an empty reason and surfaces errors', () async {
+    final repository = repositoryAnswering({
+      'code': 'PICKUP_STARTED',
+      'error': 'Pickup has started, so this order can no longer be cancelled.',
+    }, 409);
+
+    await expectLater(
+      repository.cancelOrder('a'),
+      throwsA(
+        isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 409)
+            .having((e) => e.message, 'message', startsWith('Pickup has')),
+      ),
+    );
+    expect(jsonDecode(requests.single.body), {'wholeCheckout': false});
+  });
+
+  group('cancelling', () {
+    final now = DateTime(2026, 11, 13, 12);
+
+    Order make({
+      String status = 'pending',
+      DateTime? until,
+      DateTime? pickupEnd,
+    }) => Order.fromJson({
+      ...orderJson(
+        status: status,
+        pickupEnd: pickupEnd ?? now.add(const Duration(hours: 2)),
+      ),
+      'cancelUntil': until?.toUtc().toIso8601String(),
+      'cancelledAt': status == 'cancelled' ? '2026-11-13T03:00:00.000Z' : null,
+      'checkoutId': 'c1',
+      'otherCancellable': 1,
+      'checkoutOrders': [
+        {
+          '_id': 'o2',
+          'itemName': 'Kuih',
+          'quantity': 1,
+          'stallName': 'Warung A',
+          'canCancel': true,
+        },
+        {
+          '_id': 'o3',
+          'itemName': 'Teh Tarik',
+          'quantity': 2,
+          'stallName': 'Kedai B',
+          'canCancel': false,
+        },
+      ],
+    });
+
+    test('an open order can be cancelled until the server\'s time', () {
+      final order = make(until: now.add(const Duration(minutes: 1)));
+      expect(order.canCancelAt(now), isTrue);
+      expect(order.cancelClosedReason(now), isNull);
+      expect(order.checkoutId, 'c1');
+      expect(order.otherCancellable, 1);
+      expect(
+        [
+          for (final item in order.checkoutOrders)
+            '${item.quantity} x ${item.itemName}, ${item.stallName}, '
+                '${item.canCancel}',
+        ],
+        ['1 x Kuih, Warung A, true', '2 x Teh Tarik, Kedai B, false'],
+      );
+      expect(order.canCancelAt(now.add(const Duration(minutes: 1))), isFalse);
+    });
+
+    test(
+      'an open order during pickup says why it can no longer be cancelled',
+      () {
+        expect(
+          make().cancelClosedReason(now),
+          'Pickup has started, so this order can no longer be cancelled.',
+        );
+      },
+    );
+
+    test('an ended order shows no reason', () {
+      expect(
+        make(pickupEnd: now.subtract(const Duration(minutes: 1)))
+            .cancelClosedReason(now),
+        isNull,
+      );
+    });
+
+    test('finished orders cannot be cancelled and show no reason', () {
+      final cancelled = make(status: 'cancelled');
+      expect(cancelled.canCancelAt(now), isFalse);
+      expect(cancelled.cancelClosedReason(now), isNull);
+      expect(cancelled.cancelledAt, DateTime.utc(2026, 11, 13, 3).toLocal());
+      expect(make(status: 'completed').cancelClosedReason(now), isNull);
+    });
   });
 
   group('stage', () {
