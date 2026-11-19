@@ -187,7 +187,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 x Nasi Lemak'), findsOneWidget);
-    expect(find.text('Pay at pickup'), findsOneWidget);
+    expect(find.text('Pay at Pickup'), findsOneWidget);
     expect(find.textContaining('Pickup: Today'), findsOneWidget);
     expect(harness.orderBodies, isEmpty);
 
