@@ -6,7 +6,7 @@ const SEED_REQUEST_PREFIX = 'seed-order-';
 const SAMPLE_ORDERS = [
   { customer: 0, title: 'Mee Goreng Mamak', quantity: 2 },
   { customer: 1, title: 'Mee Goreng Mamak', quantity: 2 },
-  { customer: 0, title: 'Roti Canai (2 pcs) with Dhal', quantity: 1 },
+  { customer: 0, title: 'Roti Jala (3 pcs) with Curry', quantity: 1 },
   { customer: 1, title: 'Assorted Kuih Box', quantity: 3 },
 ];
 
