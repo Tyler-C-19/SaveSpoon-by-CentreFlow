@@ -9,6 +9,7 @@ const User = require('../src/models/User');
 const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const SalesRecord = require('../src/models/SalesRecord');
+const Order = require('../src/models/Order');
 const { signToken } = require('../src/services/tokenService');
 const { unavailableProblem, LISTING_GONE } = require('../src/services/orderService');
 const { stockChangeError, availabilityError } = require('../src/validators/listingValidators');
@@ -47,6 +48,7 @@ function ownListing(listing) {
   const token = signedInAs(vendorUser);
   mock.method(Vendor, 'findOne', async () => vendor);
   mock.method(SalesRecord, 'aggregate', async () => []);
+  mock.method(Order, 'countDocuments', async () => 0);
   const findOne = mock.method(Listing, 'findOne', async () => listing);
   return { token, findOne };
 }

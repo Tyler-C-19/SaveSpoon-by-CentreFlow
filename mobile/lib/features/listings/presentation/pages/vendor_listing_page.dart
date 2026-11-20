@@ -8,16 +8,24 @@ import '../../../../core/widgets/auto_refresh.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/category_picker.dart';
+import '../widgets/active_orders_note.dart';
+import '../widgets/delete_listing_flow.dart';
 import '../widgets/listing_card.dart';
+import '../widgets/stock_changed_dialog.dart';
 import '../widgets/stock_editor.dart';
 
 DateTime _systemNow() => DateTime.now();
+
+Future<Listing?> _editNothing(BuildContext context, Listing listing) async =>
+    null;
 
 class VendorListingPage extends StatefulWidget {
   const VendorListingPage({
     super.key,
     required this.listingId,
     required this.onRelist,
+    this.onEdit = _editNothing,
+    this.onViewOrders,
     this.initial,
     this.now = _systemNow,
   });
@@ -27,6 +35,10 @@ class VendorListingPage extends StatefulWidget {
   // Opens the Relist Item step; returns the listing once it is back on sale.
   final Future<Listing?> Function(BuildContext context, Listing listing)
   onRelist;
+  // Opens Edit Listing; returns the listing once changes are saved.
+  final Future<Listing?> Function(BuildContext context, Listing listing) onEdit;
+  // Opens the vendor's Orders tab from the locked Delete Listing note.
+  final void Function(BuildContext context)? onViewOrders;
   final DateTime Function() now;
 
   @override
@@ -38,9 +50,11 @@ class _VendorListingPageState extends State<VendorListingPage>
   late Listing? _listing = widget.initial;
   late int _draft = widget.initial?.quantityAvailable ?? 0;
   int? _pastSold;
+  int _activeOrders = 0;
   String? _error;
   bool _savingStock = false;
   bool _switching = false;
+  bool _deleting = false;
 
   ListingRepository get _repository => context.read<ListingRepository>();
 
@@ -63,6 +77,7 @@ class _VendorListingPageState extends State<VendorListingPage>
       final own = await _repository.fetchMineOne(widget.listingId);
       if (!mounted) return;
       _pastSold = own.pastSold;
+      _activeOrders = own.activeOrderCount;
       _show(own.listing);
     } on ApiException catch (e) {
       if (mounted && _listing == null) setState(() => _error = e.message);
@@ -117,35 +132,11 @@ class _VendorListingPageState extends State<VendorListingPage>
 
   Future<void> _confirmStock(StockChangedException e) async {
     final current = e.current.quantityAvailable;
-    final wanted = _draft;
-    final reason = e.message.endsWith('.')
-        ? e.message.substring(0, e.message.length - 1)
-        : e.message;
-    final setAnyway = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Stock Changed'),
-        content: Text('$reason, Set it to $wanted anyway?'),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: Text('Keep $current'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: Text('Set to $wanted'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+    final setAnyway = await askAboutStockChange(
+      context,
+      message: e.message,
+      current: current,
+      wanted: _draft,
     );
     if (!mounted) return;
     if (setAnyway == true) {
@@ -178,6 +169,33 @@ class _VendorListingPageState extends State<VendorListingPage>
     if (relisted == null || !mounted) return;
     _message('${relisted.title} is back on sale.');
     await _load();
+  }
+
+  Future<void> _edit() async {
+    final saved = await widget.onEdit(context, _listing!);
+    if (saved == null || !mounted) return;
+    _message('Changes saved.');
+    await _load();
+  }
+
+  Future<void> _delete() async {
+    final listing = _listing!;
+    setState(() => _deleting = true);
+    final deleted = await runDeleteListingFlow(
+      context,
+      repository: _repository,
+      listing: listing,
+      activeOrders: _activeOrders,
+    );
+    if (!mounted) return;
+    setState(() => _deleting = false);
+    if (!deleted) {
+      await _load();
+      return;
+    }
+    // The message stays up on the Listings tab after this page closes.
+    _message('${listing.title} deleted.');
+    Navigator.of(context).pop();
   }
 
   Widget _figure(
@@ -485,6 +503,37 @@ class _VendorListingPageState extends State<VendorListingPage>
               value: description,
             ),
         ]),
+        const SizedBox(height: AppSpacing.lg),
+        // Ended listings are relisted first, then edited.
+        if (canChange) ...[
+          FilledButton.icon(
+            key: const ValueKey('edit-listing'),
+            onPressed: _deleting ? null : _edit,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Edit Listing'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        FilledButton.icon(
+          key: const ValueKey('delete-listing'),
+          style: FilledButton.styleFrom(
+            backgroundColor: colors.error,
+            foregroundColor: colors.onError,
+          ),
+          onPressed: _deleting || _activeOrders > 0 ? null : _delete,
+          icon: Icon(
+            _activeOrders > 0 ? Icons.lock_outline : Icons.delete_outline,
+          ),
+          label: const Text('Delete Listing'),
+        ),
+        if (_activeOrders > 0)
+          ActiveOrdersNote(
+            key: const ValueKey('delete-locked'),
+            count: _activeOrders,
+            onViewOrders: widget.onViewOrders == null
+                ? null
+                : () => widget.onViewOrders!(context),
+          ),
         const SizedBox(height: AppSpacing.lg),
       ],
     );

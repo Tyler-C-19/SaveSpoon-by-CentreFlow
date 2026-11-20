@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-// One finished selling round of a listing, saved when the listing is relisted.
+// One finished selling round of a listing, saved when the listing is relisted or deleted.
 // Names and prices are copies, so the record still reads correctly after edits or deletion.
 const salesRecordSchema = new mongoose.Schema(
   {
@@ -17,6 +17,7 @@ const salesRecordSchema = new mongoose.Schema(
     stockOffered: { type: Number, required: true, min: 0 },
     sold: { type: Number, required: true, min: 0 },
     leftover: { type: Number, required: true, min: 0 },
+    reason: { type: String, enum: ['relist', 'deleted'], default: 'relist' },
     recordedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
