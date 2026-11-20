@@ -197,7 +197,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Coming up'), findsNothing);
     expect(find.text('Pickup Ended'), findsOneWidget);
-    expect(find.text('Cancelled'), findsOneWidget);
+    expect(
+      find.text('Cancelled'),
+      findsNWidgets(2),
+      reason: 'view chip and status chip',
+    );
     expect(find.text('Completed'), findsOneWidget);
     expect(find.text('Pending'), findsNothing);
 
@@ -280,7 +284,7 @@ void main() {
       'Arked Meranti',
       'RM 4.50',
       'RM 9.00',
-      'Pay at pickup',
+      'Pay at Pickup',
       'Price Per Item',
       'Payment Method',
       '2',
