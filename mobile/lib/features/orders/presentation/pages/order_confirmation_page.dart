@@ -167,9 +167,13 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 ),
               ),
               Flexible(
-                child: Text(
-                  payAtPickupLabel,
-                  style: theme.textTheme.bodyMedium,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    payAtPickupLabel,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
               ),
             ],

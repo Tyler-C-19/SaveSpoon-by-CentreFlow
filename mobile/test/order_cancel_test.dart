@@ -478,6 +478,24 @@ void main() {
       expect(find.text('Order Cancelled'), findsOneWidget);
     });
 
+    testWidgets('Pay at Pickup ends at the row end on a wide screen', (
+      tester,
+    ) async {
+      await _openPlaced(tester, _Server(_order()), [
+        placed('o1', 'Nasi Lemak'),
+      ]);
+
+      final payment = find.byKey(const ValueKey('order-placed-payment'));
+      final label = find.descendant(
+        of: payment,
+        matching: find.text('Pay at Pickup'),
+      );
+      expect(
+        tester.getTopRight(label).dx,
+        moreOrLessEquals(tester.getTopRight(payment).dx, epsilon: 1),
+      );
+    });
+
     testWidgets('several orders are cancelled together', (tester) async {
       final server = await _openPlaced(
         tester,
