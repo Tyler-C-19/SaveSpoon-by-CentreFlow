@@ -17,6 +17,13 @@ const listingSchema = new mongoose.Schema(
     allergens: { type: [{ type: String, enum: ALLERGENS }], default: [] },
     otherAllergens: { type: [{ type: String, trim: true }], default: [] },
     imageUrl: { type: String, default: null },
+    // The photo: a smaller copy for cards, and the stored original with its framing for re-framing.
+    imageThumbUrl: { type: String },
+    imageId: { type: String },
+    imageOriginalUrl: { type: String },
+    imageWidth: { type: Number },
+    imageHeight: { type: Number },
+    imageCrop: { x: Number, y: Number, width: Number, height: Number },
     status: { type: String, enum: ['active', 'paused', 'sold_out', 'expired', 'cancelled'], default: 'active' },
     // When this round went on sale; relisting moves it forward. Older listings fall back to createdAt.
     listedAt: { type: Date, default: Date.now },

@@ -35,6 +35,7 @@ beforeEach(() => {
   mock.method(Vendor, 'findOne', async () => VENDOR);
   mock.method(Listing, 'countDocuments', async (filter) => (filter.status ? counts.activeListings : counts.listings));
   mock.method(Order, 'countDocuments', async () => counts.activeOrders);
+  mock.method(Listing, 'distinct', async () => []);
   mock.method(Listing, 'deleteMany', async (filter) => deleted.push(['listings', filter]));
   mock.method(Vendor, 'deleteOne', async (filter) => deleted.push(['vendor', filter]));
   mock.method(Cart, 'deleteOne', async (filter) => deleted.push(['cart', filter]));
@@ -60,6 +61,16 @@ test('a vendor deletion removes listings, profile, photo and user, and leaves or
     ['photo', 'photo-1'],
   ]);
   assert.equal(orderDelete.mock.callCount(), 0);
+});
+
+test("a vendor deletion also deletes their listings' photos, but not sample photos", async () => {
+  const token = signedInAs(makeUser('vendor'));
+  Listing.distinct.mock.mockImplementation(async () => ['savespoon/listing-photos/a', 'savespoon/listing-photos/seed/kuih', null]);
+
+  const res = await call('/api/users/me', { method: 'DELETE', token, body: { password: PASSWORD } });
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(deleted.filter(([what]) => what === 'photo'), [['photo', 'savespoon/listing-photos/a']]);
 });
 
 test('a customer deletion removes the cart and user only', async () => {

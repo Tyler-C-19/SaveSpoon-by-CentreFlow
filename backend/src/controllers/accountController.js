@@ -5,6 +5,7 @@ const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
 const accountService = require('../services/accountService');
 const { removeQuietly } = require('./photoController');
+const listingPhotos = require('../services/listingPhotoService');
 const { isText } = require('../validators/authValidators');
 
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -64,13 +65,16 @@ async function deleteMe(req, res) {
   }
 
   // The user goes last, so a failure part-way leaves an account that can try again.
+  let listingPhotoIds = [];
   if (summary.vendor) {
+    listingPhotoIds = await Listing.distinct('imageId', { vendor: summary.vendor._id });
     await Listing.deleteMany({ vendor: summary.vendor._id });
     await Vendor.deleteOne({ _id: summary.vendor._id });
   }
   await Cart.deleteOne({ customer: user._id });
   await User.deleteOne({ _id: user._id });
   if (user.photoId) await removeQuietly(user.photoId);
+  for (const id of listingPhotoIds) await listingPhotos.removeQuietly(id);
 
   return res.json({ message: 'Your account has been deleted.' });
 }
