@@ -312,7 +312,7 @@ void main() {
   Future<void> placeOrder(WidgetTester tester) async {
     await tester.tap(find.text('Place Order'));
     await tester.pumpAndSettle();
-    expect(find.text('Pay at pickup'), findsOneWidget);
+    expect(find.text('Pay at Pickup'), findsOneWidget);
     await tester.tap(find.text('Confirm'));
     await tester.pumpAndSettle();
   }
@@ -520,7 +520,7 @@ void main() {
       expect(find.byType(OrderConfirmationPage), findsOneWidget);
       expect(find.byKey(const ValueKey('order-placed-tick')), findsOneWidget);
       expect(find.byIcon(Icons.rice_bowl_rounded), findsOneWidget);
-      expect(find.text('Order placed!'), findsOneWidget);
+      expect(find.text('Order Placed!'), findsOneWidget);
       expect(find.text('Cafeteria A'), findsOneWidget);
       expect(browseCalls, greaterThan(callsBefore));
 

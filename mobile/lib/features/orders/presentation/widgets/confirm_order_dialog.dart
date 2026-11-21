@@ -128,7 +128,7 @@ class _ConfirmOrderDialog extends StatelessWidget {
                   color: AppColors.textMuted,
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                Text('Pay at pickup', style: muted),
+                Text('Pay at Pickup', style: muted),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),

@@ -7,15 +7,63 @@ import '../../../listings/presentation/widgets/listing_card.dart';
 import '../../domain/order.dart';
 import 'order_status_chip.dart';
 
-const String payAtPickupLabel = 'Pay at pickup';
+const String payAtPickupLabel = 'Pay at Pickup';
 
-String orderPlacedLabel(BuildContext context, DateTime placed) {
+// "Today, 3:45 PM", "Yesterday, ..." or "Tomorrow, ...", otherwise the date.
+String orderPlacedLabel(
+  BuildContext context,
+  DateTime placed, {
+  DateTime? now,
+}) {
   final localizations = MaterialLocalizations.of(context);
   final time = localizations.formatTimeOfDay(TimeOfDay.fromDateTime(placed));
-  return '${localizations.formatShortMonthDay(placed)}, $time';
+  final day = dateBucketLabel(placed, now ?? DateTime.now());
+  final named = const {'Today', 'Yesterday', 'Tomorrow'}.contains(day);
+  return '${named ? day : localizations.formatShortMonthDay(placed)}, $time';
 }
 
-// Just the time, for a card already sitting under a date header.
+// "5:30 PM" when it's today, else "tomorrow, 5:30 PM" or the date.
+String cancelUntilLabel(BuildContext context, DateTime until, DateTime now) {
+  final sameDay =
+      until.year == now.year &&
+      until.month == now.month &&
+      until.day == now.day;
+  return sameDay
+      ? MaterialLocalizations.of(context)
+            .formatTimeOfDay(TimeOfDay.fromDateTime(until))
+      : orderPlacedLabel(
+          context,
+          until,
+          now: now,
+        ).replaceFirst('Tomorrow', 'tomorrow');
+}
+
+// A small muted note with an info icon, as used across the app.
+class OrderNote extends StatelessWidget {
+  const OrderNote(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline, size: 16, color: AppColors.textMuted),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AppColors.textMuted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Just the time, for a card under a header that already names its day.
 String orderPlacedTimeLabel(BuildContext context, DateTime placed) =>
     MaterialLocalizations.of(context)
         .formatTimeOfDay(TimeOfDay.fromDateTime(placed));
@@ -43,11 +91,13 @@ class OrderCard extends StatelessWidget {
     required this.order,
     required this.now,
     required this.onInfo,
+    this.showPlacedDate = false,
   });
 
   final Order order;
   final DateTime now;
   final VoidCallback onInfo;
+  final bool showPlacedDate;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +150,13 @@ class OrderCard extends StatelessWidget {
                               if (placed != null) ...[
                                 const SizedBox(width: AppSpacing.sm),
                                 Text(
-                                  orderPlacedTimeLabel(context, placed),
+                                  showPlacedDate
+                                      ? orderPlacedLabel(
+                                          context,
+                                          placed,
+                                          now: now,
+                                        )
+                                      : orderPlacedTimeLabel(context, placed),
                                   style: muted,
                                 ),
                               ],
