@@ -10,6 +10,7 @@ import '../../../orders/data/order_repository.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../providers/listing_changes.dart';
+import '../widgets/listing_image.dart';
 import '../widgets/listing_card.dart';
 import '../widgets/running_out_strip.dart';
 
@@ -122,6 +123,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
   }
 
   Future<void> _open(Listing listing) async {
+    preloadListingPhoto(context, listing);
     final message = await context.push<String>(
       AppRoutes.foodDetailsFor(listing.id),
     );

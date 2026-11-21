@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
-import 'category_picker.dart';
 import 'listing_card.dart';
+import 'listing_image.dart';
 
 class SearchResultRow extends StatelessWidget {
   const SearchResultRow({super.key, required this.listing, this.onTap});
 
-  static const double thumbnailSize = 96;
+  // The photo is up to this wide, and never more than 40% of the row.
+  static const double thumbnailSize = 140;
+  static const double thumbnailShare = 0.4;
 
   // Every row is this tall, so a short name or missing address leaves space.
   static const double contentHeight = 140;
@@ -39,69 +41,76 @@ class SearchResultRow extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: SizedBox(
             height: MediaQuery.textScalerOf(context).scale(contentHeight),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Thumbnail(listing: listing),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    key: const ValueKey('search-result-text'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (listing.stallName != null)
-                        Text(
-                          'From ${listing.stallName}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: muted,
-                        ),
-                      _NameLine(listing: listing),
-                      const SizedBox(height: AppSpacing.xs),
-                      // Shrinks only when a narrow screen can't fit the line.
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Row(
-                          children: [
-                            Text(
-                              moneyLabel(listing.discountedPrice),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: colors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(
-                              moneyLabel(listing.originalPrice),
-                              style: muted?.copyWith(
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            _Pill(
-                              text: 'Save ${listing.savePercent}%',
-                              color: AppColors.onWarning,
-                              fill: AppColors.warningPale,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      _InfoLine(
-                        icon: Icons.schedule,
-                        text: pickupLabel(context, listing),
-                      ),
-                      if (listing.pickupAddress != null)
-                        _InfoLine(
-                          icon: Icons.place_outlined,
-                          text: listing.pickupAddress!,
-                        ),
-                    ],
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Thumbnail(
+                    listing: listing,
+                    width: constraints.maxWidth * thumbnailShare < thumbnailSize
+                        ? constraints.maxWidth * thumbnailShare
+                        : thumbnailSize,
                   ),
-                ),
-              ],
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      key: const ValueKey('search-result-text'),
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (listing.stallName != null)
+                          Text(
+                            'From ${listing.stallName}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: muted,
+                          ),
+                        _NameLine(listing: listing),
+                        const SizedBox(height: AppSpacing.xs),
+                        // Shrinks only when a narrow screen can't fit the line.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            children: [
+                              Text(
+                                moneyLabel(listing.discountedPrice),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: colors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Text(
+                                moneyLabel(listing.originalPrice),
+                                style: muted?.copyWith(
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              _Pill(
+                                text: 'Save ${listing.savePercent}%',
+                                color: AppColors.onWarning,
+                                fill: AppColors.warningPale,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _InfoLine(
+                          icon: Icons.schedule,
+                          text: pickupLabel(context, listing),
+                        ),
+                        if (listing.pickupAddress != null)
+                          _InfoLine(
+                            icon: Icons.place_outlined,
+                            text: listing.pickupAddress!,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -111,9 +120,10 @@ class SearchResultRow extends StatelessWidget {
 }
 
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.listing});
+  const _Thumbnail({required this.listing, required this.width});
 
   final Listing listing;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +131,7 @@ class _Thumbnail extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Container(
-        width: SearchResultRow.thumbnailSize,
+        width: width,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -132,10 +142,10 @@ class _Thumbnail extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Icon(
-              categoryIcon(listing.category),
-              size: SearchResultRow.thumbnailSize * 0.45,
-              color: Theme.of(context).colorScheme.primary,
+            ListingImage(
+              url: listing.cardImageUrl,
+              category: listing.category,
+              iconSize: 96 * 0.45,
             ),
             if (badge != null)
               Positioned(

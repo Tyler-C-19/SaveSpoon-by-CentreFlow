@@ -11,7 +11,8 @@ import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../../domain/listing_validators.dart';
 import '../../domain/pickup_times.dart';
-import '../widgets/category_picker.dart';
+import '../widgets/food_thumbnail.dart';
+import '../widgets/listing_image.dart';
 import 'add_listing_page.dart' show TimePicker;
 
 Future<TimeOfDay?> _materialTimePicker(
@@ -151,54 +152,68 @@ class _RelistPageState extends State<RelistPage> {
         color: AppColors.primaryPale,
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(categoryIcon(listing.category), size: 40, color: colors.primary),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  listing.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+      // The photo runs the full height of the text beside it.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ClipRRect(
+              key: const ValueKey('relist-photo'),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: PhotoColumn(
+                width: 96,
+                child: ListingImage(
+                  url: listing.cardImageUrl,
+                  category: listing.category,
+                  iconSize: 40,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      moneyLabel(listing.discountedPrice),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      moneyLabel(listing.originalPrice),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.textMuted,
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '${listing.category ?? 'Other'} · '
-                  '${listing.isHalal == true ? 'Halal' : 'Non-Halal'}',
-                  style: muted,
-                ),
-                Text('Allergens: ${listing.allergenSummary}', style: muted),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    listing.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  // Wraps to a second line rather than overflow.
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    children: [
+                      Text(
+                        moneyLabel(listing.discountedPrice),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        moneyLabel(listing.originalPrice),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textMuted,
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${listing.category ?? 'Other'} · '
+                    '${listing.isHalal == true ? 'Halal' : 'Non-Halal'}',
+                    style: muted,
+                  ),
+                  Text('Allergens: ${listing.allergenSummary}', style: muted),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

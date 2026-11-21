@@ -89,7 +89,13 @@ class _Details extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Center(child: FoodThumbnail(category: order.category, size: 160)),
+        Center(
+          child: FoodThumbnail(
+            category: order.category,
+            imageUrl: order.imageThumbUrl,
+            size: 160,
+          ),
+        ),
         const SizedBox(height: AppSpacing.md),
         Text(
           order.itemName,
