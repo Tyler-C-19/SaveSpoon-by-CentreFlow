@@ -21,12 +21,17 @@ const HOUR_MS = 60 * 60 * 1000;
 
 function earlierDay(fields, daysAgo, status) {
   const pickupStart = new Date(fields.pickupStart.getTime() - daysAgo * DAY_MS);
+  const createdAt = new Date(pickupStart.getTime() - HOUR_MS);
+  const cancelled = status === 'cancelled'
+    ? { cancelledAt: new Date(createdAt.getTime() + HOUR_MS / 2), cancelledBy: 'customer', cancelReason: 'changed_mind' }
+    : {};
   return {
     ...fields,
     pickupStart,
     pickupEnd: new Date(fields.pickupEnd.getTime() - daysAgo * DAY_MS),
-    createdAt: new Date(pickupStart.getTime() - HOUR_MS),
+    createdAt,
     status: status ?? 'pending',
+    ...cancelled,
   };
 }
 

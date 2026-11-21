@@ -24,6 +24,10 @@ class OrdersPage extends StatefulWidget {
       'No past orders',
       'Collected, cancelled and ended orders will show here.',
     ),
+    OrderTab.cancelled: (
+      'No cancelled orders',
+      'Orders you cancel will show here.',
+    ),
   };
 
   @override
@@ -160,6 +164,18 @@ class _OrdersPageState extends State<OrdersPage> with AutoRefresh {
       ? order.pickupStart
       : (order.createdAt ?? order.pickupStart);
 
+  // Time alone is enough only under Today, Yesterday or Tomorrow, and only
+  // when that header is the day the order was placed.
+  bool _headerNamesPlacedDay(String bucket, Order order) {
+    final placed = order.createdAt;
+    if (placed == null) return true;
+    final header = _bucketDate(order);
+    return const {'Today', 'Yesterday', 'Tomorrow'}.contains(bucket) &&
+        placed.year == header.year &&
+        placed.month == header.month &&
+        placed.day == header.day;
+  }
+
   // Runs of consecutive orders sharing one date bucket.
   List<(String, List<Order>)> _dateRuns(List<Order> orders, DateTime now) {
     final runs = <(String, List<Order>)>[];
@@ -199,6 +215,7 @@ class _OrdersPageState extends State<OrdersPage> with AutoRefresh {
             order: order,
             now: now,
             onInfo: () => _openInfo(order),
+            showPlacedDate: !_headerNamesPlacedDay(bucket, order),
           ),
         );
       }

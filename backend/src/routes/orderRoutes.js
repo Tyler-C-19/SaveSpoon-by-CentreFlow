@@ -8,5 +8,6 @@ router.post('/', requireRole('customer'), orders.createOrder);
 router.get('/', requireRole('customer'), orders.listOrders);
 router.get('/again', requireRole('customer'), orders.getOrderAgain);
 router.get('/:id', requireRole('customer'), orders.getOrder);
+router.post('/:id/cancel', requireRole('customer'), orders.cancelOrder);
 
 module.exports = router;

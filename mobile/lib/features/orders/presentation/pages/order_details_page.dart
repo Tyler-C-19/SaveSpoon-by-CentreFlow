@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/network/api_client.dart';
+import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/load_error.dart';
 import '../../../listings/domain/listing.dart';
@@ -9,8 +11,10 @@ import '../../../listings/presentation/widgets/food_thumbnail.dart';
 import '../../../listings/presentation/widgets/listing_card.dart';
 import '../../data/order_repository.dart';
 import '../../domain/order.dart';
+import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_card.dart';
 import '../widgets/order_status_chip.dart';
+import 'order_cancelled_page.dart';
 
 class OrderDetailsPage extends StatefulWidget {
   const OrderDetailsPage({super.key, required this.orderId, this.initial});
@@ -25,6 +29,9 @@ class OrderDetailsPage extends StatefulWidget {
 class _OrderDetailsPageState extends State<OrderDetailsPage> {
   late Order? _order = widget.initial;
   String? _error;
+  // The list's copy has no cancel time, so the button waits for this page's own load.
+  bool _loaded = false;
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -41,6 +48,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       setState(() {
         _order = order;
         _error = null;
+        _loaded = true;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -53,6 +61,38 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     _load();
   }
 
+  Future<void> _cancel(Order order) async {
+    final choice = await showCancelOrderDialog(context, order);
+    if (choice == null || !mounted) return;
+
+    setState(() => _cancelling = true);
+    try {
+      final result = await context.read<OrderRepository>().cancelOrder(
+        order.id,
+        reason: choice.reason,
+        wholeCheckout: choice.wholeCheckout,
+      );
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      _load();
+      await Navigator.of(context).push(
+        orderCancelledRoute(
+          OrderCancelledPage(
+            cancelled: result.cancelled,
+            skipped: result.skipped,
+            onDone: (context) => context.go(AppRoutes.customerOrders),
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final order = _order;
@@ -60,7 +100,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Order Details')),
       body: order != null
-          ? _Details(order: order)
+          ? _Details(
+              order: order,
+              cancel: _loaded && _CancelSection.showsFor(order, DateTime.now())
+                  ? _CancelSection(
+                      order: order,
+                      busy: _cancelling,
+                      onCancel: () => _cancel(order),
+                    )
+                  : null,
+            )
           : Center(
               child: error == null
                   ? const CircularProgressIndicator()
@@ -74,17 +123,21 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 }
 
 class _Details extends StatelessWidget {
-  const _Details({required this.order});
+  const _Details({required this.order, this.cancel});
 
   final Order order;
+  final Widget? cancel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = OrderStageStyle.of(context, order.stageAt(DateTime.now()));
+    final now = DateTime.now();
+    final style = OrderStageStyle.of(context, order.stageAt(now));
     final unitPrice = order.unitPrice;
     final placed = order.createdAt;
+    final cancelledAt = order.status == 'cancelled' ? order.cancelledAt : null;
     final address = order.pickupAddress;
+    final cancelSection = cancel;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -172,7 +225,14 @@ class _Details extends StatelessWidget {
               _Field(
                 icon: Icons.event_outlined,
                 label: 'Ordered',
-                value: orderPlacedLabel(context, placed),
+                value: orderPlacedLabel(context, placed, now: now),
+              ),
+            if (cancelledAt != null)
+              _Field(
+                key: const ValueKey('order-cancelled-on'),
+                icon: Icons.cancel_outlined,
+                label: 'Cancelled On',
+                value: orderPlacedLabel(context, cancelledAt, now: now),
               ),
             const Divider(height: AppSpacing.lg),
             _Field(
@@ -182,6 +242,70 @@ class _Details extends StatelessWidget {
               highlight: true,
             ),
           ],
+        ),
+        // Fades in once the page's own load says whether it can be cancelled.
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: cancelSection == null
+              ? const SizedBox.shrink()
+              : Padding(
+                  key: const ValueKey('cancel-section'),
+                  padding: const EdgeInsets.only(top: AppSpacing.lg),
+                  child: cancelSection,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CancelSection extends StatelessWidget {
+  const _CancelSection({
+    required this.order,
+    required this.busy,
+    required this.onCancel,
+  });
+
+  final Order order;
+  final bool busy;
+  final VoidCallback onCancel;
+
+  // Only open orders whose pickup hasn't ended get this section.
+  static bool showsFor(Order order, DateTime now) =>
+      order.canCancelAt(now) || order.cancelClosedReason(now) != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final until = order.cancelUntil;
+    final closed = order.cancelClosedReason(now);
+
+    if (closed != null || until == null || !order.canCancelAt(now)) {
+      return OrderNote(closed ?? '', key: const ValueKey('cancel-note'));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OrderNote(
+          'You can cancel this order until '
+          '${cancelUntilLabel(context, until, now)}.',
+          key: const ValueKey('cancel-note'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        OutlinedButton(
+          key: const ValueKey('cancel-order-button'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: colors.error,
+            side: BorderSide(color: colors.error),
+          ),
+          onPressed: busy ? null : onCancel,
+          child: busy
+              ? const SizedBox.square(
+                  dimension: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : const Text('Cancel Order'),
         ),
       ],
     );
@@ -228,6 +352,7 @@ class _SectionCard extends StatelessWidget {
 
 class _Field extends StatelessWidget {
   const _Field({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,

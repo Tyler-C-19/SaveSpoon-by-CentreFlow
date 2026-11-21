@@ -9,6 +9,13 @@ class OrderPage {
   final bool hasMore;
 }
 
+class CancelResult {
+  const CancelResult({required this.cancelled, required this.skipped});
+
+  final List<Order> cancelled;
+  final List<Order> skipped;
+}
+
 class OrderRepository {
   OrderRepository(this.api);
 
@@ -47,6 +54,25 @@ class OrderRepository {
   Future<Order> fetchOrder(String id) async {
     final data = await api.get('/api/orders/$id');
     return Order.fromJson(data['order'] as Map<String, dynamic>);
+  }
+
+  Future<CancelResult> cancelOrder(
+    String id, {
+    CancelReason? reason,
+    bool wholeCheckout = false,
+  }) async {
+    final data = await api.post(
+      '/api/orders/$id/cancel',
+      body: {'reason': ?reason?.value, 'wholeCheckout': wholeCheckout},
+    );
+    List<Order> read(Object? items) => [
+      for (final item in items as List? ?? const [])
+        Order.fromJson(item as Map<String, dynamic>),
+    ];
+    return CancelResult(
+      cancelled: read(data['cancelled']),
+      skipped: read(data['skipped']),
+    );
   }
 
   Future<List<Listing>> fetchOrderAgain() async {

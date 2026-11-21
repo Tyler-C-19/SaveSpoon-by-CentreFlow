@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
+import '../../../../core/network/api_client.dart';
+import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../listings/domain/listing.dart';
 import '../../../listings/presentation/widgets/food_thumbnail.dart';
 import '../../../listings/presentation/widgets/listing_card.dart';
+import '../../data/order_repository.dart';
 import '../../domain/order.dart';
+import '../widgets/cancel_order_dialog.dart';
+import '../widgets/order_card.dart'
+    show OrderNote, cancelUntilLabel, payAtPickupLabel;
+import 'order_cancelled_page.dart';
 
 class OrderConfirmationPage extends StatefulWidget {
   const OrderConfirmationPage({
@@ -43,10 +52,53 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     curve: const Interval(0.6, 1, curve: Curves.easeOut),
   );
 
+  bool _cancelling = false;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  // Fades in with the details; nothing can be tapped until the tick is done.
+  Widget _afterAnimation(Widget child) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, child) =>
+        IgnorePointer(ignoring: !_controller.isCompleted, child: child),
+    child: FadeTransition(opacity: _content, child: child),
+  );
+
+  Future<void> _cancel() async {
+    final orders = widget.orders;
+    final choice = orders.length == 1
+        ? await showCancelOrderDialog(context, orders.single)
+        : await showCancelCheckoutDialog(context, orders);
+    if (choice == null || !mounted) return;
+
+    setState(() => _cancelling = true);
+    try {
+      final result = await context.read<OrderRepository>().cancelOrder(
+        orders.first.id,
+        reason: choice.reason,
+        wholeCheckout: choice.wholeCheckout,
+      );
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      await Navigator.of(context).push(
+        orderCancelledRoute(
+          OrderCancelledPage(
+            cancelled: result.cancelled,
+            skipped: result.skipped,
+            onDone: (context) => context.go(AppRoutes.customerOrders),
+          ),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _cancelling = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   @override
@@ -55,43 +107,86 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
     final colors = theme.colorScheme;
     final orders = widget.orders;
     final total = orders.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final several = orders.length > 1;
+    final now = DateTime.now();
+    // The earliest deadline, so the note is right for every order.
+    final deadlines = [
+      for (final order in orders)
+        if (order.canCancelAt(now)) order.cancelUntil!,
+    ]..sort();
+    final cancelUntil = deadlines.isEmpty ? null : deadlines.first;
 
     final details = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          orders.length == 1 ? 'Order placed!' : 'Orders placed!',
+          orders.length == 1 ? 'Order Placed!' : 'Orders Placed!',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineMedium,
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Pay at pickup. Please collect within the pickup time.',
+          'Please collect within the pickup time.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: AppColors.textMuted,
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        for (final order in orders) _OrderCard(order: order),
-        if (orders.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sm),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text('Total', style: theme.textTheme.titleMedium),
+        for (final order in orders) OrderSummaryCard(order: order),
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Total', style: theme.textTheme.titleMedium),
+              ),
+              Text(
+                moneyLabel(total),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w800,
                 ),
-                Text(
-                  moneyLabel(total),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w800,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          key: const ValueKey('order-placed-payment'),
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Row(
+            children: [
+              Icon(Icons.payments_outlined, size: 18, color: colors.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'Payment Method',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textMuted,
                   ),
                 ),
-              ],
-            ),
+              ),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    payAtPickupLabel,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
+        if (cancelUntil != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          OrderNote(
+            'You can cancel ${several ? 'these orders' : 'this order'} '
+            'until ${cancelUntilLabel(context, cancelUntil, now)}.',
+            key: const ValueKey('order-placed-cancel-note'),
+          ),
+        ],
       ],
     );
 
@@ -124,9 +219,8 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                     ),
                   ),
                   const SizedBox(height: AppSpacing.md),
-                  FadeTransition(
-                    opacity: _content,
-                    child: SlideTransition(
+                  _afterAnimation(
+                    SlideTransition(
                       position: Tween<Offset>(
                         begin: const Offset(0, 0.05),
                         end: Offset.zero,
@@ -137,11 +231,32 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: AppButton(
-                label: 'Back to Home',
-                onPressed: () => widget.onDone(context),
+            _afterAnimation(
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AppButton(
+                      label: 'Back to Home',
+                      onPressed: _cancelling
+                          ? null
+                          : () => widget.onDone(context),
+                    ),
+                    if (cancelUntil != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      OutlinedButton(
+                        key: const ValueKey('order-placed-cancel'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colors.error,
+                          side: BorderSide(color: colors.error),
+                        ),
+                        onPressed: _cancelling ? null : _cancel,
+                        child: Text(several ? 'Cancel Orders' : 'Cancel Order'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -197,8 +312,8 @@ class _TickPainter extends CustomPainter {
       oldDelegate.tickColor != tickColor;
 }
 
-class _OrderCard extends StatelessWidget {
-  const _OrderCard({required this.order});
+class OrderSummaryCard extends StatelessWidget {
+  const OrderSummaryCard({super.key, required this.order});
 
   final Order order;
 
