@@ -51,7 +51,8 @@ class PhotoCrop {
       (height - other.height).abs() < tolerance;
 }
 
-// Position and zoom of a picture inside a square frame of side [frame].
+// Position and zoom of a picture inside a frame [frame] wide and
+// [frame] / [aspect] tall (square by default).
 // At zoom 1 the picture just covers the frame.
 class PicFrame {
   const PicFrame({
@@ -59,26 +60,36 @@ class PicFrame {
     required this.frame,
     required this.zoom,
     required this.offset,
+    this.aspect = 1,
   });
 
   static const double maxZoom = 4;
 
   // Centred at zoom 1.
-  factory PicFrame.centred(Size image, double frame) {
+  factory PicFrame.centred(Size image, double frame, {double aspect = 1}) {
     final start = PicFrame(
       image: image,
       frame: frame,
       zoom: 1,
       offset: Offset.zero,
+      aspect: aspect,
     );
     final shown = start.shownSize;
     return start.copyWith(
-      offset: Offset((frame - shown.width) / 2, (frame - shown.height) / 2),
+      offset: Offset(
+        (frame - shown.width) / 2,
+        (start.frameHeight - shown.height) / 2,
+      ),
     );
   }
 
-  factory PicFrame.fromCrop(PhotoCrop crop, Size image, double frame) {
-    final cover = frame / math.min(image.width, image.height);
+  factory PicFrame.fromCrop(
+    PhotoCrop crop,
+    Size image,
+    double frame, {
+    double aspect = 1,
+  }) {
+    final cover = _coverFor(image, frame, frame / aspect);
     final zoom = (frame / (crop.width * image.width * cover)).clamp(
       1.0,
       maxZoom,
@@ -88,6 +99,7 @@ class PicFrame {
       frame: frame,
       zoom: zoom,
       offset: Offset.zero,
+      aspect: aspect,
     );
     final shown = start.shownSize;
     return start.copyWith(
@@ -98,12 +110,19 @@ class PicFrame {
   final Size image;
   final double frame;
   final double zoom;
+  // Frame width divided by its height.
+  final double aspect;
 
   // Top-left of the picture relative to the frame. Never positive, so the
   // picture always covers the frame.
   final Offset offset;
 
-  double get _cover => frame / math.min(image.width, image.height);
+  double get frameHeight => frame / aspect;
+
+  static double _coverFor(Size image, double width, double height) =>
+      math.max(width / image.width, height / image.height);
+
+  double get _cover => _coverFor(image, frame, frameHeight);
 
   Size get shownSize =>
       Size(image.width * _cover * zoom, image.height * _cover * zoom);
@@ -114,15 +133,17 @@ class PicFrame {
       frame: frame,
       zoom: (zoom ?? this.zoom).clamp(1.0, maxZoom),
       offset: offset ?? this.offset,
+      aspect: aspect,
     );
     final shown = next.shownSize;
     return PicFrame(
       image: image,
       frame: frame,
       zoom: next.zoom,
+      aspect: aspect,
       offset: Offset(
         next.offset.dx.clamp(frame - shown.width, 0.0),
-        next.offset.dy.clamp(frame - shown.height, 0.0),
+        next.offset.dy.clamp(frameHeight - shown.height, 0.0),
       ),
     );
   }
@@ -143,7 +164,7 @@ class PicFrame {
       x: fraction(-offset.dx / shown.width),
       y: fraction(-offset.dy / shown.height),
       width: fraction(frame / shown.width),
-      height: fraction(frame / shown.height),
+      height: fraction(frameHeight / shown.height),
     );
   }
 }

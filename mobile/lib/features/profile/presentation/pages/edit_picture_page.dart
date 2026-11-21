@@ -43,6 +43,8 @@ class _EditPicturePageState extends State<EditPicturePage> {
 
   late _Shown _shown;
   PickedPhoto? _fresh;
+  // Kept once per picture, so redrawing while framing doesn't decode it again.
+  MemoryImage? _freshImage;
   PhotoCrop _crop = PhotoCrop.whole;
   // The saved picture's framing as first shown, to tell whether it moved.
   PhotoCrop? _savedFraming;
@@ -64,6 +66,7 @@ class _EditPicturePageState extends State<EditPicturePage> {
   void _startOver() {
     _shown = _hadPicture ? _Shown.saved : _Shown.none;
     _fresh = null;
+    _freshImage = null;
     _crop = _profile.photoCrop ?? PhotoCrop.whole;
     _savedFraming = null;
     _version++;
@@ -78,7 +81,7 @@ class _EditPicturePageState extends State<EditPicturePage> {
 
   ImageProvider? get _image => switch (_shown) {
     _Shown.none => null,
-    _Shown.fresh => MemoryImage(Uint8List.fromList(_fresh!.bytes)),
+    _Shown.fresh => _freshImage,
     _Shown.saved => NetworkImage(
       _profile.photoOriginalUrl ?? _profile.photoUrl!,
     ),
@@ -103,9 +106,11 @@ class _EditPicturePageState extends State<EditPicturePage> {
       return;
     }
     if (picked == null || !mounted) return;
+    final image = MemoryImage(Uint8List.fromList(picked.bytes));
     setState(() {
       _shown = _Shown.fresh;
       _fresh = picked;
+      _freshImage = image;
       _crop = PhotoCrop.whole;
       _version++;
     });
@@ -114,6 +119,7 @@ class _EditPicturePageState extends State<EditPicturePage> {
   void _remove() => setState(() {
     _shown = _Shown.none;
     _fresh = null;
+    _freshImage = null;
     _version++;
     _error = null;
   });
