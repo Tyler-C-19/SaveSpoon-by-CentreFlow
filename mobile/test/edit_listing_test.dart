@@ -286,7 +286,7 @@ void main() {
 
     await tester.tap(find.text('View Active Orders'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('View Orders'));
+    await tester.tap(find.widgetWithText(TextButton, 'Leave'));
     await tester.pumpAndSettle();
     expect(opened.results, ['orders']);
   });
@@ -306,7 +306,7 @@ void main() {
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Back'));
+    await tester.tap(find.widgetWithText(TextButton, 'Leave'));
     await tester.pumpAndSettle();
     expect(find.text('Edit Listing'), findsNothing);
     expect(opened.results, [null]);

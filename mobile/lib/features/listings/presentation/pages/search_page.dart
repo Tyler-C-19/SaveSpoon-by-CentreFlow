@@ -14,6 +14,7 @@ import '../../data/listing_repository.dart';
 import '../../data/recent_searches.dart';
 import '../../domain/listing.dart';
 import '../providers/listing_changes.dart';
+import '../widgets/listing_image.dart';
 import '../widgets/category_picker.dart';
 import '../widgets/search_result_row.dart';
 
@@ -250,6 +251,7 @@ class _SearchPageState extends State<SearchPage> with AutoRefresh {
   }
 
   Future<void> _open(Listing listing) async {
+    preloadListingPhoto(context, listing);
     _focus.unfocus();
     if (_query.isNotEmpty) _remember(_query);
     final message = await context.push<String>(

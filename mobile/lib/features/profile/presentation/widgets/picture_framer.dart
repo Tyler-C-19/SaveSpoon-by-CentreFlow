@@ -34,7 +34,8 @@ Future<Size?> decodeImageSize(BuildContext context, ImageProvider image) {
   return done.future;
 }
 
-// Move and zoom [image] inside a circle that fills the available square.
+// Move and zoom [image] inside a circle that fills the available square, or
+// inside a plain frame of the given [aspect] when [round] is false.
 // Reports the chosen crop whenever it changes, including once at the start.
 class PictureFramer extends StatefulWidget {
   const PictureFramer({
@@ -44,6 +45,8 @@ class PictureFramer extends StatefulWidget {
     this.initialCrop,
     this.canMove = true,
     this.sizer = decodeImageSize,
+    this.aspect = 1,
+    this.round = true,
   });
 
   final ImageProvider image;
@@ -51,6 +54,9 @@ class PictureFramer extends StatefulWidget {
   final ValueChanged<PhotoCrop> onCrop;
   final bool canMove;
   final ImageSizer sizer;
+  // Frame width divided by its height.
+  final double aspect;
+  final bool round;
 
   @override
   State<PictureFramer> createState() => _PictureFramerState();
@@ -85,8 +91,8 @@ class _PictureFramerState extends State<PictureFramer> {
     final image = _imageSize!;
     final initial = current?.toCrop() ?? widget.initialCrop;
     final frame = initial == null
-        ? PicFrame.centred(image, side)
-        : PicFrame.fromCrop(initial, image, side);
+        ? PicFrame.centred(image, side, aspect: widget.aspect)
+        : PicFrame.fromCrop(initial, image, side, aspect: widget.aspect);
     if (current == null) {
       // The starting crop, once the picture's size is known.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -116,9 +122,11 @@ class _PictureFramerState extends State<PictureFramer> {
           80.0,
           math.min(
             constraints.maxWidth,
-            constraints.maxHeight - (widget.canMove ? _sliderHeight : 0),
+            (constraints.maxHeight - (widget.canMove ? _sliderHeight : 0)) *
+                widget.aspect,
           ),
         );
+        final height = side / widget.aspect;
         final frame = _frameFor(side);
         final shown = frame.shownSize;
         return Column(
@@ -138,8 +146,9 @@ class _PictureFramerState extends State<PictureFramer> {
                           .moveBy(details.focalPointDelta),
                     )
                   : null,
-              child: SizedBox.square(
-                dimension: side,
+              child: SizedBox(
+                width: side,
+                height: height,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   child: Stack(
@@ -160,10 +169,12 @@ class _PictureFramerState extends State<PictureFramer> {
                       Positioned.fill(
                         child: IgnorePointer(
                           child: CustomPaint(
-                            painter: _CircleMask(
-                              shade: colors.scrim.withValues(alpha: 0.55),
-                              ring: colors.primary,
-                            ),
+                            painter: widget.round
+                                ? _CircleMask(
+                                    shade: colors.scrim.withValues(alpha: 0.55),
+                                    ring: colors.primary,
+                                  )
+                                : _FrameOutline(ring: colors.primary),
                           ),
                         ),
                       ),
@@ -186,7 +197,7 @@ class _PictureFramerState extends State<PictureFramer> {
                         max: PicFrame.maxZoom,
                         label: 'Zoom',
                         onChanged: (value) => _update(
-                          frame.zoomAround(value, Offset(side / 2, side / 2)),
+                          frame.zoomAround(value, Offset(side / 2, height / 2)),
                         ),
                       ),
                     ),
@@ -199,6 +210,30 @@ class _PictureFramerState extends State<PictureFramer> {
       },
     );
   }
+}
+
+// The edge of a frame that is shown whole.
+class _FrameOutline extends CustomPainter {
+  const _FrameOutline({required this.ring});
+
+  final Color ring;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        (Offset.zero & size).deflate(1.5),
+        const Radius.circular(AppRadius.lg),
+      ),
+      Paint()
+        ..color = ring
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FrameOutline oldDelegate) => oldDelegate.ring != ring;
 }
 
 // Shades everything outside the circle that becomes the profile picture.

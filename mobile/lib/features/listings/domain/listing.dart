@@ -1,3 +1,5 @@
+import '../../profile/domain/photo_crop.dart';
+
 // Keep in sync with backend listingOptions.js.
 abstract final class ListingOptions {
   static const List<String> categories = [
@@ -56,7 +58,14 @@ class Listing {
     this.soldCount = 0,
     this.pickupAddress,
     this.listedAt,
+    this.imageUrl,
+    this.imageThumbUrl,
+    this.imageOriginalUrl,
+    this.imageCrop,
   });
+
+  // Listing photos are framed 4:3.
+  static const double photoAspect = 4 / 3;
 
   factory Listing.fromJson(Map<String, dynamic> json) => Listing(
     id: json['_id'] as String,
@@ -84,6 +93,10 @@ class Listing {
     listedAt: json['listedAt'] == null
         ? null
         : DateTime.parse(json['listedAt'] as String).toLocal(),
+    imageUrl: json['imageUrl'] as String?,
+    imageThumbUrl: json['imageThumbUrl'] as String?,
+    imageOriginalUrl: json['imageOriginalUrl'] as String?,
+    imageCrop: PhotoCrop.fromJson(json['imageCrop']),
   );
 
   final String id;
@@ -105,6 +118,16 @@ class Listing {
   final String? pickupAddress;
   // When this round went on sale; relisting moves it forward.
   final DateTime? listedAt;
+  // The framed photo (up to 1024 px) and a smaller copy for cards.
+  final String? imageUrl;
+  final String? imageThumbUrl;
+  // Vendor only: the stored original and its framing, for re-framing.
+  final String? imageOriginalUrl;
+  final PhotoCrop? imageCrop;
+
+  String? get cardImageUrl => imageThumbUrl ?? imageUrl;
+
+  bool get canReframePhoto => imageOriginalUrl != null && imageCrop != null;
 
   int get savePercent =>
       ((originalPrice - discountedPrice) / originalPrice * 100).round();

@@ -7,6 +7,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/error_text.dart';
+import '../../../profile/data/photo_picker.dart';
+import '../../../profile/presentation/widgets/picture_framer.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../../domain/listing_validators.dart';
@@ -14,6 +16,7 @@ import '../../domain/pickup_times.dart';
 import '../widgets/allergen_picker.dart';
 import '../widgets/category_picker.dart';
 import '../widgets/active_orders_note.dart';
+import '../widgets/listing_photo_field.dart';
 import '../widgets/stock_changed_dialog.dart';
 
 typedef TimePicker = Future<TimeOfDay?> Function(
@@ -46,7 +49,12 @@ class AddListingPage extends StatefulWidget {
     this.onRelistExisting = _openNothing,
     this.editing,
     this.onViewOrders,
+    this.photoPicker,
+    this.sizer = decodeImageSize,
   });
+
+  final PhotoPicker? photoPicker;
+  final ImageSizer sizer;
 
   // Edits this listing instead of adding a new one.
   final Listing? editing;
@@ -80,6 +88,7 @@ class _AddListingPageState extends State<AddListingPage> {
   late TimeOfDay _end;
   String? _timeError;
   final Set<String> _allergens = {};
+  ListingPhotoDraft _photo = ListingPhotoDraft.keep;
 
   bool _submitted = false;
   bool _isSaving = false;
@@ -192,7 +201,9 @@ class _AddListingPageState extends State<AddListingPage> {
 
   static int _minutes(TimeOfDay time) => time.hour * 60 + time.minute;
 
-  bool get _dirty => _snapshot() != _initial;
+  bool get _detailsChanged => _snapshot() != _initial;
+
+  bool get _dirty => _detailsChanged || _photo.isChange;
 
   bool get _windowLocked => _isEditing && _activeOrders > 0;
 
@@ -468,7 +479,8 @@ class _AddListingPageState extends State<AddListingPage> {
           _otherAllergens.text,
         ),
       );
-      if (mounted) context.pop(listing);
+      final withPhoto = await _savePhotoAfter(listing);
+      if (mounted) context.pop(withPhoto);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -476,7 +488,80 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
+  Future<Listing> _applyPhoto(Listing listing) {
+    final repository = context.read<ListingRepository>();
+    final fresh = _photo.fresh;
+    if (fresh != null) {
+      return repository.setPhoto(
+        listing.id,
+        bytes: fresh.bytes,
+        filename: fresh.filename,
+        crop: _photo.crop!,
+      );
+    }
+    if (_photo.removed) return repository.removePhoto(listing.id);
+    return repository.reframePhoto(listing.id, _photo.crop!);
+  }
+
+  // Once the listing itself is saved; a failed photo leaves the listing saved.
+  Future<Listing> _savePhotoAfter(Listing listing) async {
+    if (!_photo.isChange) return listing;
+    try {
+      return await _applyPhoto(listing);
+    } on ApiException catch (e) {
+      _photoNotSaved(
+        _byServer(e)
+            ? "${listing.title} saved, but our server couldn't upload the "
+                  'photo. Please re-add it from Edit Listing later.'
+            : "${listing.title} saved, but the photo wasn't. ${e.message}",
+      );
+      return listing;
+    }
+  }
+
+  // Server or connection trouble, as opposed to a refused file or the daily limit.
+  static bool _byServer(ApiException e) =>
+      e.statusCode == null || e.statusCode! >= 500;
+
+  // Shown over the page the form returns to.
+  void _photoNotSaved(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          key: const ValueKey('photo-not-saved'),
+          duration: const Duration(seconds: 6),
+          content: Text(text),
+        ),
+      );
+  }
+
+  // Only the photo changed, so the listing details aren't sent again.
+  Future<void> _savePhotoOnly() async {
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      final listing = await _applyPhoto(widget.editing!);
+      if (mounted) context.pop(listing);
+    } on ApiException catch (e) {
+      // Nothing else changed, so the form closes with nothing saved but this note.
+      _photoNotSaved(
+        _byServer(e)
+            ? "Our server couldn't upload the photo. Please try again later "
+                  'from Edit Listing.'
+            : "The photo wasn't saved. ${e.message}",
+      );
+      if (mounted) context.pop();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   Future<void> _saveEdit() async {
+    if (!_detailsChanged) return _savePhotoOnly();
     final editing = widget.editing!;
     final now = widget.now();
     // An untouched window is sent exactly as it was, so it doesn't count as moved.
@@ -506,7 +591,8 @@ class _AddListingPageState extends State<AddListingPage> {
           _otherAllergens.text,
         ),
       );
-      if (mounted) context.pop(listing);
+      final withPhoto = await _savePhotoAfter(listing);
+      if (mounted) context.pop(withPhoto);
     } on StockChangedException catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -572,8 +658,8 @@ class _AddListingPageState extends State<AddListingPage> {
     );
   }
 
-  // Leaving drops unsaved edits, so ask first. [leaveLabel] names where to.
-  Future<bool> _mayLeave(String leaveLabel) async {
+  // Leaving drops unsaved edits, so ask first.
+  Future<bool> _mayLeave() async {
     if (!_dirty) return true;
     final leave = await showDialog<bool>(
       context: context,
@@ -587,7 +673,7 @@ class _AddListingPageState extends State<AddListingPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(leaveLabel),
+            child: const Text('Leave'),
           ),
         ],
       ),
@@ -596,13 +682,13 @@ class _AddListingPageState extends State<AddListingPage> {
   }
 
   Future<void> _viewOrders() async {
-    if (await _mayLeave('View Orders') && mounted) {
+    if (await _mayLeave() && mounted) {
       widget.onViewOrders!(context);
     }
   }
 
   Future<void> _back() async {
-    if (await _mayLeave('Back') && mounted) Navigator.of(context).pop();
+    if (await _mayLeave() && mounted) Navigator.of(context).pop();
   }
 
   Widget _timeField(String label, TimeOfDay time, {required bool isStart}) {
@@ -650,6 +736,23 @@ class _AddListingPageState extends State<AddListingPage> {
                   },
                   child: const SizedBox.shrink(),
                 ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(
+                    'Photo (optional)',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                ListingPhotoField(
+                  draft: _photo,
+                  onChanged: (draft) => setState(() => _photo = draft),
+                  saved: widget.editing,
+                  category: _category,
+                  enabled: !_isSaving,
+                  photoPicker: widget.photoPicker,
+                  sizer: widget.sizer,
+                ),
+                gap,
                 AppTextField(
                   label: 'Item name',
                   icon: Icons.fastfood_outlined,

@@ -14,6 +14,7 @@ const orderSchema = new mongoose.Schema(
     checkoutId: { type: String },
     itemName: { type: String, required: true },
     category: { type: String, enum: CATEGORIES },
+    imageThumbUrl: { type: String },
     stallName: { type: String, required: true },
     pickupAddress: { type: String },
     pickupStart: { type: Date, required: true },

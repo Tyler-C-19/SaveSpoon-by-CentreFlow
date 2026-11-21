@@ -77,6 +77,7 @@ function itemView({ item, listing, vendor }, now) {
     itemName: item.itemName,
     stallName: item.stallName,
     category: listing?.category ?? null,
+    imageThumbUrl: listing?.imageThumbUrl ?? null,
     available: !problem,
     reason: problem ? REASONS.get(problem.code) : null,
     notices: [],

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
-import 'category_picker.dart';
+import 'listing_image.dart';
 
 String pickupLabel(BuildContext context, Listing listing) =>
     pickupRangeLabel(context, listing.pickupStart, listing.pickupEnd);
@@ -51,6 +51,34 @@ class ListingCard extends StatelessWidget {
     final badge = showBadges ? listing.badgeAt(now) : null;
     final showRelist =
         onRelist != null && !showBadges && listing.canRelistAt(now);
+    final ribbons = unlisted == null
+        ? null
+        : Positioned(
+            top: AppSpacing.sm,
+            left: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Ribbon(
+                  text: unlisted,
+                  color: AppColors.endingSoon,
+                  fill: AppColors.endingSoonPale,
+                ),
+                // Relisted while turned off: a second ribbon under the first.
+                if (relisted) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  KeyedSubtree(
+                    key: const ValueKey('relisted-ribbon'),
+                    child: _Ribbon(
+                      text: 'Relisted',
+                      color: colors.primary,
+                      fill: AppColors.page,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
     // With "Relist Now", the picture and text fade but its label doesn't;
     // otherwise the whole card fades.
     Widget faded(Widget child) =>
@@ -84,6 +112,8 @@ class ListingCard extends StatelessWidget {
           Expanded(
             child: _withRelist(
               showRelist ? onRelist : null,
+              onPhoto: listing.cardImageUrl != null,
+              ribbons: ribbons,
               faded(
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -102,16 +132,13 @@ class ListingCard extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      if (!showRelist)
-                        Center(
-                          child: Icon(
-                            categoryIcon(listing.category),
-                            size: 48,
-                            color: unlisted == null
-                                ? colors.primary
-                                : AppColors.textMuted,
-                          ),
-                        ),
+                      ListingImage(
+                        url: listing.cardImageUrl,
+                        category: listing.category,
+                        greyed: unlisted != null,
+                        greyColor: AppColors.unlisted,
+                        showIcon: !showRelist,
+                      ),
                       if (badge != null)
                         Positioned(
                           top: AppSpacing.sm,
@@ -162,29 +189,32 @@ class ListingCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    Row(
-                      children: [
-                        Text(
-                          moneyLabel(listing.discountedPrice),
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: unlisted == null
-                                ? colors.primary
-                                : AppColors.textMuted,
+                    // Shrinks rather than overflow a narrow card.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            moneyLabel(listing.discountedPrice),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: unlisted == null
+                                  ? colors.primary
+                                  : AppColors.textMuted,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Flexible(
-                          child: Text(
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
                             moneyLabel(listing.originalPrice),
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: muted?.copyWith(
                               decoration: TextDecoration.lineThrough,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     _InfoLine(
@@ -245,45 +275,36 @@ class ListingCard extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         if (showRelist) card else Opacity(opacity: 0.7, child: card),
-        Positioned(
-          top: AppSpacing.sm,
-          left: 0,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Ribbon(
-                text: unlisted,
-                color: AppColors.endingSoon,
-                fill: AppColors.endingSoonPale,
-              ),
-              // Relisted while turned off: a second ribbon under the first.
-              if (relisted) ...[
-                const SizedBox(height: AppSpacing.xs),
-                KeyedSubtree(
-                  key: const ValueKey('relisted-ribbon'),
-                  child: _Ribbon(
-                    text: 'Relisted',
-                    color: colors.primary,
-                    fill: AppColors.page,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+        // With "Relist Now" the ribbons sit inside the picture, under it.
+        if (!showRelist) ?ribbons,
         if (!showRelist) ?tapArea,
       ],
     );
   }
 }
 
-// The greyed picture shows a green "Relist Now"; tapping the picture relists.
-Widget _withRelist(VoidCallback? onRelist, Widget picture) {
+// The greyed picture shows "Relist Now"; tapping the picture relists. Over a
+// photo, a dark shade with white words keeps it readable; without a photo
+// the words stay green on the plain background.
+Widget _withRelist(
+  VoidCallback? onRelist,
+  Widget picture, {
+  bool onPhoto = false,
+  Widget? ribbons,
+}) {
   if (onRelist == null) return picture;
   return Stack(
     fit: StackFit.expand,
     children: [
       picture,
+      if (onPhoto)
+        Builder(
+          builder: (context) => ColoredBox(
+            key: const ValueKey('relist-now-shade'),
+            color: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.45),
+          ),
+        ),
+      ?ribbons,
       Material(
         type: MaterialType.transparency,
         child: InkWell(
@@ -292,21 +313,31 @@ Widget _withRelist(VoidCallback? onRelist, Widget picture) {
           child: Builder(
             builder: (context) {
               final theme = Theme.of(context);
-              final green = theme.colorScheme.primary;
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.replay, size: 32, color: green),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Relist Now',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: green,
-                        fontWeight: FontWeight.w800,
-                      ),
+              final color = onPhoto
+                  ? theme.colorScheme.onPrimary
+                  : theme.colorScheme.primary;
+              // Shrinks rather than overflow a small picture or large text.
+              return Padding(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      key: const ValueKey('relist-now'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.replay, size: 32, color: color),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Relist Now',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               );
             },

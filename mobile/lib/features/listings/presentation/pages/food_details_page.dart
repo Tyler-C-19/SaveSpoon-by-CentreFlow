@@ -12,6 +12,8 @@ import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/category_picker.dart';
 import '../widgets/listing_card.dart';
+import '../widgets/listing_image.dart';
+import 'photo_view_page.dart';
 
 const String placeOrderFailed =
     "We couldn't place your order. Please try again.";
@@ -297,37 +299,35 @@ class _Details extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.lg),
           child: SizedBox(
             height: 200,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.primaryPale, AppColors.primarySoft],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ListingImage(
+                  url: listing.imageUrl,
+                  placeholderUrl: listing.imageThumbUrl,
+                  category: listing.category,
+                  iconSize: 80,
                 ),
-              ),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Center(
-                    child: Icon(
-                      categoryIcon(listing.category),
-                      size: 80,
-                      color: colors.primary,
+                if (listing.imageUrl case final url?)
+                  Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      key: const ValueKey('open-photo'),
+                      onTap: () => openPhotoView(context, url, listing.title),
                     ),
                   ),
-                  if (badge != null)
-                    Positioned(
-                      top: AppSpacing.md,
-                      left: 0,
-                      child: ListingRibbon(badge: badge, listing: listing),
-                    ),
+                if (badge != null)
                   Positioned(
-                    bottom: AppSpacing.sm,
-                    right: AppSpacing.sm,
-                    child: SavePill(listing: listing),
+                    top: AppSpacing.md,
+                    left: 0,
+                    child: ListingRibbon(badge: badge, listing: listing),
                   ),
-                ],
-              ),
+                Positioned(
+                  bottom: AppSpacing.sm,
+                  right: AppSpacing.sm,
+                  child: SavePill(listing: listing),
+                ),
+              ],
             ),
           ),
         ),

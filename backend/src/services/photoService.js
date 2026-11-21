@@ -22,33 +22,48 @@ function configure() {
   });
 }
 
+const asOriginal = (result) => ({
+  id: result.public_id,
+  originalUrl: result.secure_url,
+  width: result.width,
+  height: result.height,
+});
+
 // Stores the original (up to 1024 px). Resolves to { id, originalUrl, width, height }.
-function upload(buffer) {
+// A fixed publicId (a full path) replaces whatever was stored under it.
+function upload(buffer, { folder = FOLDER, publicId } = {}) {
   return new Promise((resolve, reject) => {
     configure();
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: FOLDER,
         resource_type: 'image',
         transformation: [{ width: ORIGINAL_LIMIT, height: ORIGINAL_LIMIT, crop: 'limit' }],
+        // A fixed publicId is the full path, so it isn't put under the folder again.
+        ...(publicId ? { public_id: publicId, overwrite: true } : { folder }),
       },
       (err, result) => {
         if (err || !result) return reject(new PhotoError(err?.message ?? 'Upload failed'));
-        return resolve({
-          id: result.public_id,
-          originalUrl: result.secure_url,
-          width: result.width,
-          height: result.height,
-        });
+        return resolve(asOriginal(result));
       }
     );
     stream.end(buffer);
   });
 }
 
-// The framed square, cut from the original by Cloudinary when first viewed.
-// crop is in fractions of the original.
-function framedUrl({ id, width, height }, crop) {
+// An already stored original, or null when there is none.
+async function findUploaded(id) {
+  configure();
+  try {
+    return asOriginal(await cloudinary.api.resource(id, { resource_type: 'image' }));
+  } catch (err) {
+    if (err?.error?.http_code === 404 || err?.http_code === 404) return null;
+    throw new PhotoError(err?.error?.message ?? err?.message ?? 'Lookup failed');
+  }
+}
+
+// The framed picture, cut from the original by Cloudinary when first viewed.
+// crop is in fractions of the original; size defaults to the profile square.
+function framedUrl({ id, width, height }, crop, size = { width: SIZE, height: SIZE, crop: 'fill' }) {
   configure();
   const px = (fraction, total) => Math.round(fraction * total);
   return cloudinary.url(id, {
@@ -61,7 +76,7 @@ function framedUrl({ id, width, height }, crop) {
         width: Math.max(1, px(crop.width, width)),
         height: Math.max(1, px(crop.height, height)),
       },
-      { width: SIZE, height: SIZE, crop: 'fill' },
+      size,
     ],
   });
 }
@@ -72,4 +87,4 @@ async function remove(id) {
   await cloudinary.uploader.destroy(id, { resource_type: 'image' });
 }
 
-module.exports = { upload, framedUrl, remove, isConfigured, PhotoError };
+module.exports = { upload, findUploaded, framedUrl, remove, isConfigured, PhotoError };

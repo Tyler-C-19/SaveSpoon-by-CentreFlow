@@ -23,7 +23,7 @@ function sampleListings([stall1, stall2, stall3]) {
       pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'egg', 'soy'],
     }),
     make(stall2, {
-      title: 'Roti Canai (2 pcs) with Dhal', description: 'Fresh roti canai with dhal',
+      title: 'Roti Jala (3 pcs) with Curry', description: 'Lacy net crepes with chicken curry',
       category: 'Snacks', isHalal: true,
       originalPrice: 3.5, discountedPrice: 2, quantityAvailable: 10, soldCount: 1,
       pickupStart: hoursFromNow(2), pickupEnd: hoursFromNow(4), allergens: ['gluten', 'milk'],
