@@ -26,6 +26,8 @@ import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/listings/presentation/providers/listing_changes.dart';
 import '../../features/orders/domain/order.dart';
 import '../../features/orders/presentation/pages/order_confirmation_page.dart';
+import '../../features/orders/presentation/pages/order_details_page.dart';
+import '../../features/orders/presentation/pages/orders_page.dart';
 import '../../features/profile/domain/user_profile.dart';
 import '../../features/profile/presentation/pages/change_password_page.dart';
 import '../../features/profile/presentation/pages/edit_details_page.dart';
@@ -49,6 +51,7 @@ abstract final class AppRoutes {
   static const String customerOrders = '/customer/orders';
   static const String foodDetails = '/customer/food/:id';
   static const String orderConfirmation = '/customer/order-placed';
+  static const String orderDetails = '/customer/orders/:id';
   static const String customerProfile = '/customer/profile';
   static const String vendorSetup = '/vendor/setup';
   static const String vendorHome = '/vendor/home';
@@ -63,6 +66,8 @@ abstract final class AppRoutes {
 
   static String profileEditFor(String role) => '/$role/profile/edit';
   static String profilePasswordFor(String role) => '/$role/profile/password';
+
+  static String orderDetailsFor(String id) => '/customer/orders/$id';
 
   static String foodDetailsFor(String id) => '/customer/food/$id';
 
@@ -302,6 +307,16 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
         ),
       ),
     ),
+    GoRoute(
+      path: AppRoutes.orderDetails,
+      pageBuilder: (context, state) => _slideInPage<void>(
+        state,
+        OrderDetailsPage(
+          orderId: state.pathParameters['id']!,
+          initial: state.extra as Order?,
+        ),
+      ),
+    ),
     StatefulShellRoute.indexedStack(
       pageBuilder: (context, state, shell) => _fadeInPage(
         state,
@@ -314,7 +329,7 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
           AppRoutes.customerCart,
           const CartPage(onOrdered: _openConfirmation),
         ),
-        _tab(AppRoutes.customerOrders, const PlaceholderPage(title: 'Orders')),
+        _tab(AppRoutes.customerOrders, const OrdersPage()),
         _tab(AppRoutes.customerProfile, const ProfilePage()),
       ],
     ),

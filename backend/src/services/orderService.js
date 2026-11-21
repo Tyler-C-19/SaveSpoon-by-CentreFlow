@@ -119,7 +119,93 @@ async function placeOrder({ customer, listingId, quantity, requestId }) {
   }
 }
 
+const ORDER_TABS = ['all', 'upcoming', 'history'];
+const OPEN_STATUSES = ['pending', 'confirmed'];
+const ORDER_AGAIN_SIZE = 6;
+// How many past items are checked for Order Again before giving up.
+const ORDER_AGAIN_LOOKBACK = 50;
+
+const ORDER_FIELDS = 'itemName category stallName pickupAddress pickupStart pickupEnd quantity unitPrice originalUnitPrice totalPrice status checkoutId createdAt';
+const CARD_FIELDS = 'title description category isHalal originalPrice discountedPrice quantityAvailable soldCount pickupStart pickupEnd allergens otherAllergens imageUrl status createdAt vendor';
+
+// Upcoming: still to collect. History: finished, cancelled, or the pickup window has passed.
+function orderTabQuery(tab, customer, now = new Date()) {
+  if (tab === 'upcoming') {
+    return {
+      filter: { customer, status: { $in: OPEN_STATUSES }, pickupEnd: { $gt: now } },
+      sort: { pickupStart: 1, pickupEnd: 1, _id: 1 },
+    };
+  }
+  if (tab === 'history') {
+    return {
+      filter: {
+        customer,
+        $or: [{ status: { $nin: OPEN_STATUSES } }, { pickupEnd: { $lte: now } }],
+      },
+      sort: { createdAt: -1, _id: -1 },
+    };
+  }
+  return { filter: { customer }, sort: { createdAt: -1, _id: -1 } };
+}
+
+async function listOrders({ customer, tab, page, pageSize }) {
+  const { filter, sort } = orderTabQuery(tab, customer);
+  const found = await Order.find(filter, ORDER_FIELDS, {
+    sort,
+    skip: (page - 1) * pageSize,
+    limit: pageSize + 1,
+    lean: true,
+  });
+  return { orders: found.slice(0, pageSize), hasMore: found.length > pageSize };
+}
+
+function findOwnOrder(customer, orderId) {
+  if (!mongoose.isValidObjectId(orderId)) return null;
+  return Order.findOne({ _id: orderId, customer }, ORDER_FIELDS, { lean: true });
+}
+
+// Listings the customer ordered before that can be ordered now, most recently ordered first.
+async function orderAgainListings(customer, now = new Date()) {
+  const ordered = await Order.aggregate([
+    { $match: { customer } },
+    { $group: { _id: '$listing', lastOrdered: { $max: '$createdAt' } } },
+    { $sort: { lastOrdered: -1, _id: 1 } },
+    { $limit: ORDER_AGAIN_LOOKBACK },
+  ]);
+  if (ordered.length === 0) return [];
+
+  const ids = ordered.map((item) => String(item._id));
+  const listings = await Listing.find(
+    {
+      _id: { $in: ids },
+      status: 'active',
+      quantityAvailable: { $gt: 0 },
+      pickupEnd: { $gt: now },
+    },
+    CARD_FIELDS,
+    { lean: true }
+  );
+  const vendors = await Vendor.find(
+    { _id: { $in: listings.map((listing) => listing.vendor) } },
+    'stallName',
+    { lean: true }
+  );
+  const stallNames = new Map(vendors.map((vendor) => [String(vendor._id), vendor.stallName]));
+
+  return listings
+    .filter((listing) => stallNames.has(String(listing.vendor)))
+    .sort((a, b) => ids.indexOf(String(a._id)) - ids.indexOf(String(b._id)))
+    .slice(0, ORDER_AGAIN_SIZE)
+    .map(({ vendor, ...listing }) => ({ ...listing, stallName: stallNames.get(String(vendor)) }));
+}
+
 module.exports = {
+  ORDER_TABS,
+  ORDER_AGAIN_SIZE,
+  orderTabQuery,
+  listOrders,
+  findOwnOrder,
+  orderAgainListings,
   GONE,
   LISTING_GONE,
   SOLD_OUT,

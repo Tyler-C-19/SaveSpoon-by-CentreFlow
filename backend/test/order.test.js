@@ -360,7 +360,7 @@ test('seed orders add up to each sample listing soldCount', () => {
   assert.equal(orders.length, SAMPLE_ORDERS.length);
   for (const listing of listings) {
     const sold = orders
-      .filter((order) => order.itemName === listing.title)
+      .filter((order) => order.itemName === listing.title && order.pickupEnd === listing.pickupEnd)
       .reduce((sum, order) => sum + order.quantity, 0);
     assert.equal(listing.soldCount, sold, listing.title);
   }

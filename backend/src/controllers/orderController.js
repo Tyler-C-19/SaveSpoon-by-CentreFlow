@@ -33,4 +33,37 @@ async function createOrder(req, res) {
   return res.status(result.repeated ? 200 : 201).json({ order: result.order });
 }
 
-module.exports = { createOrder, PLACE_FAILED };
+const PAGE_SIZE = 20;
+const PAGE_PATTERN = /^[1-9]\d{0,4}$/;
+const ORDER_NOT_FOUND = "We couldn't find this order.";
+
+async function listOrders(req, res) {
+  const { tab = 'all', page = '1' } = req.query;
+  if (typeof tab !== 'string' || !orderService.ORDER_TABS.includes(tab)) {
+    return res.status(400).json({ error: 'Choose All, Upcoming or History.' });
+  }
+  if (typeof page !== 'string' || !PAGE_PATTERN.test(page)) {
+    return res.status(400).json({ error: 'Page must be a whole number.' });
+  }
+
+  const result = await orderService.listOrders({
+    customer: req.user._id,
+    tab,
+    page: Number(page),
+    pageSize: PAGE_SIZE,
+  });
+  return res.json(result);
+}
+
+async function getOrder(req, res) {
+  const order = await orderService.findOwnOrder(req.user._id, req.params.id);
+  if (!order) return res.status(404).json({ error: ORDER_NOT_FOUND });
+  return res.json({ order });
+}
+
+async function getOrderAgain(req, res) {
+  const listings = await orderService.orderAgainListings(req.user._id);
+  return res.json({ listings });
+}
+
+module.exports = { createOrder, listOrders, getOrder, getOrderAgain, PLACE_FAILED, ORDER_NOT_FOUND, PAGE_SIZE };
