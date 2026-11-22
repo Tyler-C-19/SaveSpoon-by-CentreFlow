@@ -1,5 +1,6 @@
 const Listing = require('../models/Listing');
 const Vendor = require('../models/Vendor');
+const User = require('../models/User');
 const { findLiveListing, unavailableProblem, GONE, LISTING_GONE } = require('../services/orderService');
 const geminiService = require('../services/geminiService');
 const { descriptionError } = require('../validators/vendorValidators');
@@ -24,6 +25,7 @@ const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 10
 const PAGE_SIZE = 20;
 const RUNNING_OUT_SIZE = 6;
 const OTHER_STALLS_SIZE = 6;
+const OTHER_LISTINGS_SIZE = 4;
 const TOP_RESULTS = 3;
 const SEARCH_MAX_LENGTH = 50;
 const PAGE_PATTERN = /^[1-9]\d{0,4}$/;
@@ -228,7 +230,47 @@ async function getDetails(req, res) {
     vendor: vendorId, location, imageId, imageOriginalUrl, imageWidth, imageHeight, imageCrop, ...details
   } = listing.toObject();
   return res.json({
-    listing: { ...details, stallName: vendor.stallName, pickupAddress: vendor.address },
+    listing: {
+      ...details,
+      stallName: vendor.stallName,
+      pickupAddress: vendor.address,
+      pickupLocation: vendor.location?.coordinates,
+      pickupPlaceId: vendor.placeId,
+      vendorPhone: vendor.phone,
+    },
+  });
+}
+
+async function getVendorInfo(req, res) {
+  const { listing, vendor } = await findLiveListing(req.params.id);
+  if (!listing || unavailableProblem(listing)?.code === LISTING_GONE) {
+    const { status, ...problem } = GONE;
+    return res.status(status).json(problem);
+  }
+
+  const [owner, otherListings] = await Promise.all([
+    User.findById(vendor.user, 'photoUrl'),
+    Listing.aggregate([
+      availableMatch(new Date()),
+      { $match: { vendor: vendor._id, _id: { $ne: listing._id } } },
+      withListedAt,
+      { $sort: { soldCount: -1, ...NEWEST_FIRST } },
+      { $limit: OTHER_LISTINGS_SIZE },
+      ...withStall,
+      publicFields,
+    ]),
+  ]);
+  return res.json({
+    vendor: {
+      stallName: vendor.stallName,
+      description: vendor.description,
+      address: vendor.address,
+      phone: vendor.phone,
+      photoUrl: owner?.photoUrl,
+      location: vendor.location?.coordinates,
+      placeId: vendor.placeId,
+    },
+    otherListings,
   });
 }
 
@@ -587,6 +629,7 @@ module.exports = {
   getRunningOut,
   search,
   getDetails,
+  getVendorInfo,
   getMine,
   getMineOne,
   updateStock,

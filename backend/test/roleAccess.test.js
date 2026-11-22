@@ -230,5 +230,7 @@ test('the seed creates no admin and keeps admins on reset', () => {
   assert.doesNotMatch(seed, /role: 'admin'/);
   assert.doesNotMatch(seed, /admin@savespoon/);
   assert.match(seed, /User\.deleteMany\(seededUsers\)/);
-  assert.equal((seed.match(/account\(\{/g) ?? []).length, 5);
+  const { SAMPLE_ACCOUNTS } = require('../seed/sampleAccounts');
+  assert.equal(SAMPLE_ACCOUNTS.length, 5);
+  assert.ok(SAMPLE_ACCOUNTS.every(({ user }) => user.role !== 'admin'));
 });

@@ -105,6 +105,8 @@ function itemView({ item, listing, vendor }, now) {
     pickupStart: listing.pickupStart,
     pickupEnd: listing.pickupEnd,
     pickupAddress: vendor.address,
+    pickupLocation: vendor.location?.coordinates,
+    pickupPlaceId: vendor.placeId,
     notices,
   };
 }
