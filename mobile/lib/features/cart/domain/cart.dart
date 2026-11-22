@@ -1,3 +1,6 @@
+import '../../seller_profile/domain/geo_point.dart';
+import '../../seller_profile/domain/vendor_info.dart';
+
 class CartItem {
   const CartItem({
     required this.listingId,
@@ -15,6 +18,8 @@ class CartItem {
     this.stockLeft,
     this.pickupStart,
     this.pickupEnd,
+    this.pickupLocation,
+    this.pickupPlaceId,
   });
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -37,6 +42,8 @@ class CartItem {
     pickupEnd: json['pickupEnd'] == null
         ? null
         : DateTime.parse(json['pickupEnd'] as String).toLocal(),
+    pickupLocation: geoPointFrom(json['pickupLocation']),
+    pickupPlaceId: json['pickupPlaceId'] as String?,
   );
 
   final String listingId;
@@ -54,6 +61,8 @@ class CartItem {
   final int? stockLeft;
   final DateTime? pickupStart;
   final DateTime? pickupEnd;
+  final GeoPoint? pickupLocation;
+  final String? pickupPlaceId;
 }
 
 class Cart {

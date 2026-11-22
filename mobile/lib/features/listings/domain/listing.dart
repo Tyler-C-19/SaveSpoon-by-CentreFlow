@@ -1,4 +1,6 @@
 import '../../profile/domain/photo_crop.dart';
+import '../../seller_profile/domain/geo_point.dart';
+import '../../seller_profile/domain/vendor_info.dart';
 
 // Keep in sync with backend listingOptions.js.
 abstract final class ListingOptions {
@@ -62,6 +64,9 @@ class Listing {
     this.imageThumbUrl,
     this.imageOriginalUrl,
     this.imageCrop,
+    this.pickupLocation,
+    this.pickupPlaceId,
+    this.vendorPhone,
   });
 
   // Listing photos are framed 4:3.
@@ -97,6 +102,9 @@ class Listing {
     imageThumbUrl: json['imageThumbUrl'] as String?,
     imageOriginalUrl: json['imageOriginalUrl'] as String?,
     imageCrop: PhotoCrop.fromJson(json['imageCrop']),
+    pickupLocation: geoPointFrom(json['pickupLocation']),
+    pickupPlaceId: json['pickupPlaceId'] as String?,
+    vendorPhone: json['vendorPhone'] as String?,
   );
 
   final String id;
@@ -124,6 +132,10 @@ class Listing {
   // Vendor only: the stored original and its framing, for re-framing.
   final String? imageOriginalUrl;
   final PhotoCrop? imageCrop;
+  // Details page only: the stall's pin and contact number.
+  final GeoPoint? pickupLocation;
+  final String? pickupPlaceId;
+  final String? vendorPhone;
 
   String? get cardImageUrl => imageThumbUrl ?? imageUrl;
 
