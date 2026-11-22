@@ -83,6 +83,7 @@ function orderFields({ customer, listing, vendor, quantity, requestId, checkoutI
     checkoutId,
     itemName: listing.title,
     category: listing.category,
+    imageThumbUrl: listing.imageThumbUrl ?? undefined,
     stallName: vendor.stallName,
     pickupAddress: vendor.address,
     pickupStart: listing.pickupStart,

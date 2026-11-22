@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import '../../profile/domain/photo_crop.dart';
 import '../domain/listing.dart';
 
 class AllergenSuggestion {
@@ -220,6 +221,31 @@ class ListingRepository {
   }
 
   Future<void> delete(String id) => api.delete('/api/listings/$id');
+
+  Listing _listing(dynamic data) =>
+      Listing.fromJson(data['listing'] as Map<String, dynamic>);
+
+  Future<Listing> setPhoto(
+    String id, {
+    required List<int> bytes,
+    required String filename,
+    required PhotoCrop crop,
+  }) async => _listing(
+    await api.putFile(
+      '/api/listings/$id/photo',
+      field: 'photo',
+      bytes: bytes,
+      filename: filename,
+      fields: crop.toFormFields(),
+    ),
+  );
+
+  Future<Listing> reframePhoto(String id, PhotoCrop crop) async => _listing(
+    await api.patch('/api/listings/$id/photo', body: {'crop': crop.toJson()}),
+  );
+
+  Future<Listing> removePhoto(String id) async =>
+      _listing(await api.delete('/api/listings/$id/photo'));
 
   Future<Listing> setPaused(String id, {required bool paused}) async {
     final data = await api.patch(

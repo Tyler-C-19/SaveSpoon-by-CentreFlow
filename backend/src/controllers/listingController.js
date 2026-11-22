@@ -17,6 +17,7 @@ const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
 const { countActiveOrders } = require('../services/accountService');
+const listingPhotos = require('../services/listingPhotoService');
 
 const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
 
@@ -56,6 +57,7 @@ const publicFields = {
     allergens: 1,
     otherAllergens: 1,
     imageUrl: 1,
+    imageThumbUrl: 1,
     status: 1,
     createdAt: 1,
     stallName: '$vendorProfile.stallName',
@@ -222,7 +224,9 @@ async function getDetails(req, res) {
     return res.status(status).json(problem);
   }
 
-  const { vendor: vendorId, location, ...details } = listing.toObject();
+  const {
+    vendor: vendorId, location, imageId, imageOriginalUrl, imageWidth, imageHeight, imageCrop, ...details
+  } = listing.toObject();
   return res.json({
     listing: { ...details, stallName: vendor.stallName, pickupAddress: vendor.address },
   });
@@ -552,6 +556,7 @@ async function deleteListing(req, res) {
     await undoRecord();
     return res.status(404).json(LISTING_NOT_FOUND);
   }
+  await listingPhotos.removeQuietly(listing.imageId);
   return res.json({ deleted: true, listingId: String(listing._id) });
 }
 
@@ -590,4 +595,7 @@ module.exports = {
   updateListing,
   deleteListing,
   suggestAllergens,
+  findOwnListing,
+  EDITABLE_STATUSES,
+  PICKUP_OVER,
 };

@@ -10,6 +10,7 @@ class CartItem {
     required this.notices,
     this.reason,
     this.category,
+    this.imageThumbUrl,
     this.pickupAddress,
     this.stockLeft,
     this.pickupStart,
@@ -27,6 +28,7 @@ class CartItem {
     reason: json['reason'] as String?,
     notices: [for (final item in json['notices'] as List) item as String],
     category: json['category'] as String?,
+    imageThumbUrl: json['imageThumbUrl'] as String?,
     pickupAddress: json['pickupAddress'] as String?,
     stockLeft: json['stockLeft'] as int?,
     pickupStart: json['pickupStart'] == null
@@ -47,6 +49,7 @@ class CartItem {
   final String? reason;
   final List<String> notices;
   final String? category;
+  final String? imageThumbUrl;
   final String? pickupAddress;
   final int? stockLeft;
   final DateTime? pickupStart;

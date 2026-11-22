@@ -68,6 +68,7 @@ class Order {
     this.checkoutOrders = const [],
     this.pickupAddress,
     this.category,
+    this.imageThumbUrl,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
@@ -76,6 +77,7 @@ class Order {
     stallName: json['stallName'] as String,
     pickupAddress: json['pickupAddress'] as String?,
     category: json['category'] as String?,
+    imageThumbUrl: json['imageThumbUrl'] as String?,
     quantity: json['quantity'] as int,
     unitPrice: (json['unitPrice'] as num?)?.toDouble(),
     totalPrice: (json['totalPrice'] as num).toDouble(),
@@ -101,6 +103,7 @@ class Order {
   final String stallName;
   final String? pickupAddress;
   final String? category;
+  final String? imageThumbUrl;
   final int quantity;
   final double? unitPrice;
   final double totalPrice;

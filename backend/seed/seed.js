@@ -14,10 +14,13 @@ const { sampleSalesRecords } = require('./sampleSalesRecords');
 const { sampleListings, STALL_NAMES } = require('./sampleListings');
 const { sampleOrders, sampleCart, SEED_REQUEST_PREFIX } = require('./sampleOrders');
 const { sampleSearchListings, sampleRefreshOps } = require('./sampleSearchListings');
+const { applySeedImages } = require('./sampleImages');
+const photoService = require('../src/services/photoService');
 
 const LISTINGS_FLAG = '--listings';
 const SEARCH_SAMPLES_FLAG = '--search-samples';
 const SALES_RECORDS_FLAG = '--sales-records';
+const IMAGES_FLAG = '--images';
 const CUSTOMER_EMAILS = ['customer1@savespoon.test', 'customer2@savespoon.test'];
 const VENDOR_EMAILS = ['vendor1@savespoon.test', 'vendor2@savespoon.test', 'vendor3@savespoon.test'];
 const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
@@ -27,6 +30,49 @@ async function addOrdersAndCart(customers, listings, stalls) {
   await Order.insertMany(sampleOrders(customers, listings, stalls));
   const { customer, items } = sampleCart(customers[0], listings, stalls);
   await Cart.findOneAndUpdate({ customer }, { $set: { items } }, { upsert: true });
+}
+
+// Sample photos for the given listings; skipped without Cloudinary keys.
+async function addImages(listings) {
+  if (!photoService.isConfigured()) {
+    console.log('Cloudinary keys are missing, so no sample photos were added.');
+    return;
+  }
+  let counts;
+  try {
+    counts = await applySeedImages(listings, {
+      photoService,
+      updateListing: (id, fields) => Listing.updateOne({ _id: id }, { $set: fields }),
+    });
+  } catch (err) {
+    console.log(`Sample photos failed (${err.message}); everything else is seeded. Try npm run seed -- --images later.`);
+    return;
+  }
+  console.log(
+    `Sample photos: ${counts.updated} listings updated, ${counts.uploaded} uploaded, `
+      + `${counts.alreadyStored} already on Cloudinary.`
+  );
+}
+
+async function seededStalls() {
+  // Found by login email, since vendors may have renamed their stalls.
+  const users = await User.find({ email: { $in: VENDOR_EMAILS } });
+  const found = await Vendor.find({ user: { $in: users.map((user) => user._id) } });
+  return VENDOR_EMAILS.map((email) => {
+    const user = users.find((item) => item.email === email);
+    return user && found.find((vendor) => String(vendor.user) === String(user._id));
+  });
+}
+
+// Adds sample photos to the existing seeded listings; nothing else changes.
+async function seedImagesOnly() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  const stalls = (await seededStalls()).filter(Boolean);
+  if (!stalls.length) {
+    console.log('The seeded vendors are missing, so nothing changed.');
+    return;
+  }
+  await addImages(await Listing.find({ vendor: { $in: stalls.map((stall) => stall._id) } }));
 }
 
 async function seedListingsOnly() {
@@ -44,6 +90,7 @@ async function seedListingsOnly() {
     return;
   }
   const listings = await Listing.insertMany(sampleListings(stalls));
+  await addImages(listings);
 
   const accounts = await User.find({ email: { $in: CUSTOMER_EMAILS } });
   const customers = CUSTOMER_EMAILS.map((email) => accounts.find((user) => user.email === email));
@@ -76,13 +123,7 @@ async function seedSalesRecordsOnly() {
   await mongoose.connect(process.env.MONGODB_URI);
   await SalesRecord.init();
 
-  // Found by login email, since vendors may have renamed their stalls.
-  const users = await User.find({ email: { $in: VENDOR_EMAILS } });
-  const found = await Vendor.find({ user: { $in: users.map((user) => user._id) } });
-  const stalls = VENDOR_EMAILS.map((email) => {
-    const user = users.find((item) => item.email === email);
-    return user && found.find((vendor) => String(vendor.user) === String(user._id));
-  });
+  const stalls = await seededStalls();
   if (stalls.includes(undefined)) {
     console.log('The seeded vendors are missing, so nothing changed.');
     return;
@@ -104,6 +145,10 @@ async function seedSalesRecordsOnly() {
 }
 
 async function seed() {
+  if (process.argv.includes(IMAGES_FLAG)) {
+    await seedImagesOnly();
+    return;
+  }
   if (process.argv.includes(SALES_RECORDS_FLAG)) {
     await seedSalesRecordsOnly();
     return;
@@ -171,6 +216,7 @@ async function seed() {
 
   const stalls = [stall1, stall2, stall3];
   const listings = await Listing.insertMany(sampleListings(stalls));
+  await addImages(listings);
   await addOrdersAndCart([customer1, customer2], listings, stalls);
   const records = await SalesRecord.insertMany(sampleSalesRecords(listings, stalls));
 

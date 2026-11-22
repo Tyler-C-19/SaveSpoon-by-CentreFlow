@@ -46,6 +46,7 @@ class CartItemTile extends StatelessWidget {
             children: [
               FoodThumbnail(
                 category: item.category,
+                imageUrl: item.imageThumbUrl,
                 size: thumbnailSize,
                 available: item.available,
               ),
@@ -54,23 +55,10 @@ class CartItemTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.itemName,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Remove ${item.itemName}',
-                          visualDensity: VisualDensity.compact,
-                          color: colors.error,
-                          icon: const Icon(Icons.delete_outline, size: 20),
-                          onPressed: onRemove,
-                        ),
-                      ],
+                    Text(
+                      item.itemName,
+                      key: const ValueKey('cart-item-name'),
+                      style: theme.textTheme.titleMedium,
                     ),
                     if (reason != null)
                       Text(
@@ -92,6 +80,14 @@ class CartItemTile extends StatelessWidget {
                       ),
                   ],
                 ),
+              ),
+              // In its own column, so its tap area leaves no gap under the name.
+              IconButton(
+                tooltip: 'Remove ${item.itemName}',
+                visualDensity: VisualDensity.compact,
+                color: colors.error,
+                icon: const Icon(Icons.delete_outline, size: 20),
+                onPressed: onRemove,
               ),
             ],
           ),
@@ -115,12 +111,21 @@ class CartItemTile extends StatelessWidget {
                   max: item.stockLeft ?? item.quantity,
                   onChanged: onQuantityChanged,
                 ),
-                const Spacer(),
-                Text(
-                  moneyLabel(item.lineTotal),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: colors.primary,
-                    fontWeight: FontWeight.w800,
+                const SizedBox(width: AppSpacing.sm),
+                // Shrinks rather than overflow on narrow phones with large text.
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        moneyLabel(item.lineTotal),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colors.primary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],

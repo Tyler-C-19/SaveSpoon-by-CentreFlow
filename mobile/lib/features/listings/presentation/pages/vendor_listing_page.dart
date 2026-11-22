@@ -11,6 +11,7 @@ import '../widgets/category_picker.dart';
 import '../widgets/active_orders_note.dart';
 import '../widgets/delete_listing_flow.dart';
 import '../widgets/listing_card.dart';
+import '../widgets/listing_image.dart';
 import '../widgets/stock_changed_dialog.dart';
 import '../widgets/stock_editor.dart';
 
@@ -174,7 +175,9 @@ class _VendorListingPageState extends State<VendorListingPage>
   Future<void> _edit() async {
     final saved = await widget.onEdit(context, _listing!);
     if (saved == null || !mounted) return;
-    _message('Changes saved.');
+    // Queued after any photo message from the form, rather than replacing it.
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Changes saved.')));
     await _load();
   }
 
@@ -320,26 +323,13 @@ class _VendorListingPageState extends State<VendorListingPage>
           borderRadius: BorderRadius.circular(AppRadius.lg),
           child: SizedBox(
             height: 200,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: unlisted == null
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primaryPale, AppColors.primarySoft],
-                      )
-                    : null,
-                color: unlisted == null ? null : AppColors.unlisted,
-              ),
-              child: Center(
-                child: Icon(
-                  categoryIcon(listing.category),
-                  size: 80,
-                  color: unlisted == null
-                      ? colors.primary
-                      : AppColors.textMuted,
-                ),
-              ),
+            child: ListingImage(
+              url: listing.imageUrl,
+              placeholderUrl: listing.imageThumbUrl,
+              category: listing.category,
+              greyed: unlisted != null,
+              greyColor: AppColors.unlisted,
+              iconSize: 80,
             ),
           ),
         ),

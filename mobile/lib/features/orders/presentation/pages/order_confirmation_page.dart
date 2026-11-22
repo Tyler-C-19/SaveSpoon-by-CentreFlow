@@ -322,6 +322,17 @@ class OrderSummaryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final address = order.pickupAddress;
+    final name = Text(
+      '${order.quantity} x ${order.itemName}',
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleMedium,
+    );
+    final priceStyle = theme.textTheme.titleMedium?.copyWith(
+      color: colors.primary,
+      fontWeight: FontWeight.w800,
+    );
+    final price = moneyLabel(order.totalPrice);
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -331,50 +342,75 @@ class OrderSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: colors.outlineVariant),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FoodThumbnail(category: order.category, size: 64),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      // The photo is at least square and as tall as the text beside it.
+      // The price sits beside the name, or under it when that would leave
+      // the name less than half the text width.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final textWidth =
+              constraints.maxWidth - FoodThumbnail.fillSize - AppSpacing.sm;
+          final priceWidth = (TextPainter(
+            text: TextSpan(text: price, style: priceStyle),
+            textDirection: Directionality.of(context),
+            textScaler: MediaQuery.textScalerOf(context),
+            maxLines: 1,
+          )..layout()).width;
+          final sideBySide =
+              textWidth - priceWidth - AppSpacing.sm >= textWidth / 2;
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${order.quantity} x ${order.itemName}',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      moneyLabel(order.totalPrice),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colors.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+                FoodThumbnail.fill(
+                  key: const ValueKey('order-photo'),
+                  category: order.category,
+                  imageUrl: order.imageThumbUrl,
                 ),
-                const SizedBox(height: AppSpacing.xs),
-                _Line(icon: Icons.storefront_outlined, text: order.stallName),
-                if (address != null)
-                  _Line(icon: Icons.location_on_outlined, text: address),
-                _Line(
-                  icon: Icons.schedule,
-                  text: pickupRangeLabel(
-                    context,
-                    order.pickupStart,
-                    order.pickupEnd,
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (sideBySide)
+                        Row(
+                          key: const ValueKey('order-price-beside'),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: name),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(price, style: priceStyle),
+                          ],
+                        )
+                      else ...[
+                        name,
+                        Text(
+                          price,
+                          key: const ValueKey('order-price-below'),
+                          style: priceStyle,
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xs),
+                      _Line(
+                        icon: Icons.storefront_outlined,
+                        text: order.stallName,
+                      ),
+                      if (address != null)
+                        _Line(icon: Icons.location_on_outlined, text: address),
+                      _Line(
+                        icon: Icons.schedule,
+                        text: pickupRangeLabel(
+                          context,
+                          order.pickupStart,
+                          order.pickupEnd,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

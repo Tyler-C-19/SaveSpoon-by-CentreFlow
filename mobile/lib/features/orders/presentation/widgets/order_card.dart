@@ -128,7 +128,11 @@ class OrderCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FoodThumbnail(category: order.category, size: 72),
+                    FoodThumbnail(
+                      category: order.category,
+                      imageUrl: order.imageThumbUrl,
+                      size: 72,
+                    ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
