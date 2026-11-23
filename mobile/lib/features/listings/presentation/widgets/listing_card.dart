@@ -28,6 +28,9 @@ class ListingCard extends StatelessWidget {
     this.onTap,
     this.relisted = false,
     this.onRelist,
+    this.onShowVendor,
+    this.onPressDown,
+    this.inStallPane = false,
   });
 
   static const double browseHeight = 250;
@@ -39,6 +42,12 @@ class ListingCard extends StatelessWidget {
   final bool relisted;
   // Vendor cards only: a Relist button on the picture once pickup has ended.
   final VoidCallback? onRelist;
+  // Customer cards only: a long-press shows the stall, and a finger touching
+  // the card starts loading it.
+  final VoidCallback? onShowVendor;
+  final VoidCallback? onPressDown;
+  // In the vendor pane: no stall line, and the stock line shows in its place.
+  final bool inStallPane;
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +182,7 @@ class ListingCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (listing.stallName != null)
+                    if (listing.stallName != null && !inStallPane)
                       Text(
                         'From ${listing.stallName}',
                         maxLines: 1,
@@ -221,7 +230,7 @@ class ListingCard extends StatelessWidget {
                       icon: Icons.schedule,
                       text: pickupLabel(context, listing),
                     ),
-                    if (!showBadges)
+                    if (!showBadges || inStallPane)
                       _InfoLine(
                         icon: Icons.inventory_2_outlined,
                         text: '${listing.quantityAvailable} in stock',
@@ -247,6 +256,8 @@ class ListingCard extends StatelessWidget {
               key: ValueKey('listing-card-${listing.id}'),
               borderRadius: BorderRadius.circular(AppRadius.lg),
               onTap: onTap,
+              onLongPress: onShowVendor,
+              onTapDown: onPressDown == null ? null : (_) => onPressDown!(),
             ),
           );
 

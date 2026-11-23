@@ -3,11 +3,16 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/network/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/external_links.dart';
 import '../../../../core/widgets/quantity_stepper.dart';
 import '../../../orders/data/order_repository.dart';
 import '../../../orders/domain/order.dart';
 import '../../../orders/domain/request_id.dart';
 import '../../../orders/presentation/widgets/confirm_order_dialog.dart';
+import '../../../seller_profile/presentation/widgets/pickup_info_row.dart';
+import '../../../seller_profile/domain/vendor_info.dart';
+import '../../../seller_profile/presentation/widgets/vendor_details_card.dart';
+import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/category_picker.dart';
@@ -46,6 +51,7 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
   bool _ordering = false;
   bool _adding = false;
   String? _requestId;
+  VendorInfo? _vendorInfo;
 
   @override
   void initState() {
@@ -64,11 +70,11 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
   }
 
   Future<void> _load() async {
+    final repository = context.read<ListingRepository>();
     try {
-      final listing = await context.read<ListingRepository>().fetchDetails(
-        widget.listingId,
-      );
+      final listing = await repository.fetchDetails(widget.listingId);
       if (!mounted) return;
+      _loadVendor(repository, listing.id);
       final now = DateTime.now();
       if (!listing.isAvailableAt(now)) {
         _leave(listing.unavailableMessageAt(now));
@@ -158,9 +164,13 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
   Widget build(BuildContext context) {
     final listing = _listing;
     return Scaffold(
-      appBar: AppBar(title: Text(listing?.stallName ?? '')),
+      appBar: AppBar(title: const Text('Food Details')),
       body: listing != null
-          ? _Details(listing: listing)
+          ? _Details(
+              listing: listing,
+              vendorInfo: _vendorInfo,
+              onShowVendor: () => showVendorPane(context, listing: listing),
+            )
           : _error == null
           ? const Center(child: CircularProgressIndicator())
           : Center(
@@ -184,6 +194,15 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
             ),
       bottomNavigationBar: listing == null ? null : _orderBar(listing),
     );
+  }
+
+  // Loaded alongside the food so the vendor pane usually opens already filled.
+  void _loadVendor(ListingRepository repository, String id) {
+    _vendorInfo ??= repository.cachedVendorInfo(id);
+    if (repository.isVendorInfoFresh(id)) return;
+    repository.fetchVendorInfo(id).then((info) {
+      if (mounted) setState(() => _vendorInfo = info);
+    }, onError: (_) {});
   }
 
   Widget _orderBar(Listing listing) {
@@ -280,9 +299,15 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
 }
 
 class _Details extends StatelessWidget {
-  const _Details({required this.listing});
+  const _Details({
+    required this.listing,
+    required this.onShowVendor,
+    this.vendorInfo,
+  });
 
   final Listing listing;
+  final VendorInfo? vendorInfo;
+  final VoidCallback onShowVendor;
 
   @override
   Widget build(BuildContext context) {
@@ -291,6 +316,8 @@ class _Details extends StatelessWidget {
     final badge = listing.badgeAt(DateTime.now());
     final description = listing.description;
     final address = listing.pickupAddress;
+    final location = listing.pickupLocation;
+    final phone = listing.vendorPhone;
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -365,6 +392,42 @@ class _Details extends StatelessWidget {
           Text(description),
         ],
         const SizedBox(height: AppSpacing.md),
+        VendorDetailsCard(
+          stallName: listing.stallName ?? '',
+          info: vendorInfo,
+          onTap: onShowVendor,
+          details: [
+            if (address != null)
+              PickupInfoRow(
+                icon: Icons.location_on_outlined,
+                label: 'Pickup address',
+                value: address,
+                actionLabel: directionsLabel,
+                actionIcon: directionsIcon,
+                actionKey: const ValueKey('details-find-on-maps'),
+                onAction: location == null
+                    ? null
+                    : () => openDirections(
+                        lat: location.lat,
+                        lng: location.lng,
+                        placeId: listing.pickupPlaceId,
+                        address: address,
+                        context: context,
+                      ),
+              ),
+            if (phone != null)
+              PickupInfoRow(
+                icon: Icons.phone_outlined,
+                label: 'Contact',
+                value: phone,
+                actionLabel: 'Call',
+                actionIcon: Icons.call_outlined,
+                actionKey: const ValueKey('details-call'),
+                onAction: () => callPhone(phone, context: context),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
         Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
@@ -373,12 +436,6 @@ class _Details extends StatelessWidget {
           ),
           child: Column(
             children: [
-              if (address != null)
-                _InfoRow(
-                  icon: Icons.location_on_outlined,
-                  label: 'Pickup address',
-                  value: address,
-                ),
               _InfoRow(
                 icon: Icons.schedule,
                 label: 'Pickup time',
