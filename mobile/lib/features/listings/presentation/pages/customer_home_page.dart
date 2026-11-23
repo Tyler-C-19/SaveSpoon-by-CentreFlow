@@ -13,6 +13,7 @@ import '../providers/listing_changes.dart';
 import '../widgets/listing_image.dart';
 import '../widgets/listing_card.dart';
 import '../widgets/running_out_strip.dart';
+import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key, required this.name});
@@ -133,6 +134,12 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
       ..showSnackBar(SnackBar(content: Text(message)));
     await _load();
   }
+
+  void _showVendor(Listing listing) =>
+      showVendorPane(context, listing: listing, onOpenListing: _open);
+
+  void _prefetchVendor(Listing listing) =>
+      context.read<ListingRepository>().prefetchVendorInfo(listing.id);
 
   void _retry() {
     setState(() {
@@ -261,6 +268,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
             listing: listings[index],
             showBadges: true,
             onTap: () => _open(listings[index]),
+            onShowVendor: () => _showVendor(listings[index]),
+            onPressDown: () => _prefetchVendor(listings[index]),
           ),
         ),
       ),
@@ -348,7 +357,12 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
                 ),
               ),
               SliverToBoxAdapter(
-                child: RunningOutStrip(listings: runningOut, onOpen: _open),
+                child: RunningOutStrip(
+                  listings: runningOut,
+                  onOpen: _open,
+                  onShowVendor: _showVendor,
+                  onPressDown: _prefetchVendor,
+                ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
             ],
@@ -373,6 +387,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
                   key: const ValueKey('order-again-strip'),
                   listings: orderAgain,
                   onOpen: _open,
+                  onShowVendor: _showVendor,
+                  onPressDown: _prefetchVendor,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),

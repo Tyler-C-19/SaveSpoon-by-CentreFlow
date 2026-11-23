@@ -10,6 +10,7 @@ import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/auto_refresh.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
 import '../../data/listing_repository.dart';
 import '../../data/recent_searches.dart';
 import '../../domain/listing.dart';
@@ -265,6 +266,14 @@ class _SearchPageState extends State<SearchPage> with AutoRefresh {
     await _refresh();
   }
 
+  void _showVendor(Listing listing) {
+    _focus.unfocus();
+    showVendorPane(context, listing: listing, onOpenListing: _open);
+  }
+
+  void _prefetchVendor(Listing listing) =>
+      context.read<ListingRepository>().prefetchVendorInfo(listing.id);
+
   List<Listing> _available(List<Listing> listings) {
     final now = DateTime.now();
     return [
@@ -403,6 +412,8 @@ class _SearchPageState extends State<SearchPage> with AutoRefresh {
         itemBuilder: (context, index) => SearchResultRow(
           listing: listings[index],
           onTap: () => _open(listings[index]),
+          onShowVendor: () => _showVendor(listings[index]),
+          onPressDown: () => _prefetchVendor(listings[index]),
         ),
       ),
     ),

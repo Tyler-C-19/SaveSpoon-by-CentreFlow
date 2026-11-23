@@ -447,6 +447,34 @@ void main() {
       expect(top, lessThan(tester.getTopLeft(find.text("What's New")).dy));
     });
 
+    testWidgets('every Home strip and card can show the stall', (tester) async {
+      await _pump(
+        tester,
+        _server(
+          listings: [_listing(id: 'a', title: 'Grid item')],
+          runningOut: [_listing(id: 'b', title: 'Strip item', stock: 2)],
+        ),
+        onOrderAgain: (_) async => jsonResponse({
+          'listings': [_listing(id: 'c', title: 'Ordered before')],
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      final strips = tester.widgetList<RunningOutStrip>(
+        find.byType(RunningOutStrip),
+      );
+      expect(strips, hasLength(2));
+      for (final strip in strips) {
+        expect(strip.onShowVendor, isNotNull);
+        expect(strip.onPressDown, isNotNull);
+      }
+      for (final card in tester.widgetList<ListingCard>(
+        find.byType(ListingCard),
+      )) {
+        expect(card.onShowVendor, isNotNull);
+      }
+    });
+
     testWidgets('is hidden when nothing qualifies or the request fails', (
       tester,
     ) async {
