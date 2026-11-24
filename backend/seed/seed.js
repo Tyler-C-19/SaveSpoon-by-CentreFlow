@@ -9,8 +9,10 @@ const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const Cart = require('../src/models/Cart');
 const SalesRecord = require('../src/models/SalesRecord');
+const Favourite = require('../src/models/Favourite');
 const { parseResetArgs, RESET_FLAG, CONFIRM_FLAG } = require('./resetGuard');
 const { sampleSalesRecords } = require('./sampleSalesRecords');
+const { sampleFavourites } = require('./sampleFavourites');
 const { sampleListings, STALL_NAMES } = require('./sampleListings');
 const { sampleOrders, sampleCart, SEED_REQUEST_PREFIX } = require('./sampleOrders');
 const { sampleSearchListings, sampleRefreshOps } = require('./sampleSearchListings');
@@ -23,6 +25,7 @@ const SEARCH_SAMPLES_FLAG = '--search-samples';
 const SALES_RECORDS_FLAG = '--sales-records';
 const IMAGES_FLAG = '--images';
 const RESTORE_ACCOUNTS_FLAG = '--restore-accounts';
+const FAVOURITES_FLAG = '--favourites';
 const CUSTOMER_EMAILS = ['customer1@savespoon.test', 'customer2@savespoon.test'];
 const VENDOR_EMAILS = ['vendor1@savespoon.test', 'vendor2@savespoon.test', 'vendor3@savespoon.test'];
 
@@ -145,6 +148,27 @@ async function seedSalesRecordsOnly() {
   console.log(`Seeded: ${records.length} sales records. Other data unchanged.`);
 }
 
+// Adds the sample Favourites to the seeded customers, once.
+async function seedFavouritesOnly() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  await Favourite.init();
+
+  const accounts = await User.find({ email: { $in: CUSTOMER_EMAILS } });
+  const customers = CUSTOMER_EMAILS.map((email) => accounts.find((user) => user.email === email));
+  const stalls = await seededStalls();
+  if (customers.includes(undefined) || stalls.includes(undefined)) {
+    console.log('The seeded customers or vendors are missing, so nothing changed.');
+    return;
+  }
+  if ((await Favourite.countDocuments({ customer: { $in: customers.map((user) => user._id) } })) > 0) {
+    console.log('The seeded customers already have Favourites, so nothing changed.');
+    return;
+  }
+  const listings = await Listing.find({ vendor: { $in: stalls.map((stall) => stall._id) } });
+  const favourites = await Favourite.insertMany(sampleFavourites(customers, listings));
+  console.log(`Seeded: ${favourites.length} Favourites. Other data unchanged.`);
+}
+
 // Re-creates only the sample accounts that are gone, and any sample vendor's
 // stall that is gone, with that stall's sample listings.
 async function restoreAccounts() {
@@ -190,6 +214,10 @@ async function seed() {
     await restoreAccounts();
     return;
   }
+  if (process.argv.includes(FAVOURITES_FLAG)) {
+    await seedFavouritesOnly();
+    return;
+  }
   if (process.argv.includes(IMAGES_FLAG)) {
     await seedImagesOnly();
     return;
@@ -215,7 +243,7 @@ async function seed() {
   }
 
   await mongoose.connect(process.env.MONGODB_URI);
-  await Promise.all([User.init(), Vendor.init(), Listing.init(), Order.init(), Cart.init(), SalesRecord.init()]);
+  await Promise.all([User.init(), Vendor.init(), Listing.init(), Order.init(), Cart.init(), SalesRecord.init(), Favourite.init()]);
 
   const seededUsers = { role: { $ne: 'admin' } };
   if ((await User.countDocuments(seededUsers)) > 0 && !reset) {
@@ -224,13 +252,14 @@ async function seed() {
     return;
   }
   if (reset) {
+    await Favourite.deleteMany({});
     await Cart.deleteMany({});
     await Order.deleteMany({});
     await SalesRecord.deleteMany({});
     await Listing.deleteMany({});
     await Vendor.deleteMany({});
     await User.deleteMany(seededUsers);
-    console.log('Old users, vendors, listings, orders, sales records and carts cleared.');
+    console.log('Old users, vendors, listings, orders, sales records, carts and Favourites cleared.');
   }
 
   const passwordHash = await bcrypt.hash('Password123', 10);
@@ -250,8 +279,12 @@ async function seed() {
   await addImages(listings);
   await addOrdersAndCart([customer1, customer2], listings, stalls);
   const records = await SalesRecord.insertMany(sampleSalesRecords(listings, stalls));
+  const favourites = await Favourite.insertMany(sampleFavourites([customer1, customer2], listings));
 
-  console.log(`Seeded: 5 users, 3 vendors, 6 listings, 4 orders, ${records.length} sales records, 1 cart.`);
+  console.log(
+    `Seeded: 5 users, 3 vendors, 6 listings, 4 orders, ${records.length} sales records, 1 cart, `
+      + `${favourites.length} Favourites.`
+  );
   console.log('Test login password for every seeded account: Password123');
 }
 

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Vendor = require('../models/Vendor');
 const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
+const Favourite = require('../models/Favourite');
 const accountService = require('../services/accountService');
 const { removeQuietly } = require('./photoController');
 const listingPhotos = require('../services/listingPhotoService');
@@ -68,10 +69,13 @@ async function deleteMe(req, res) {
   let listingPhotoIds = [];
   if (summary.vendor) {
     listingPhotoIds = await Listing.distinct('imageId', { vendor: summary.vendor._id });
+    const listingIds = await Listing.distinct('_id', { vendor: summary.vendor._id });
+    await Favourite.deleteMany({ listing: { $in: listingIds } });
     await Listing.deleteMany({ vendor: summary.vendor._id });
     await Vendor.deleteOne({ _id: summary.vendor._id });
   }
   await Cart.deleteOne({ customer: user._id });
+  await Favourite.deleteMany({ customer: user._id });
   await User.deleteOne({ _id: user._id });
   if (user.photoId) await removeQuietly(user.photoId);
   for (const id of listingPhotoIds) await listingPhotos.removeQuietly(id);

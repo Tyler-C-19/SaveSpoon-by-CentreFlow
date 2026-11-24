@@ -30,7 +30,7 @@ function sampleListings([stall1, stall2, stall3]) {
     }),
     make(stall3, {
       title: 'Chicken Sandwich', description: 'Grilled chicken, lettuce and mayo',
-      category: 'Snacks', isHalal: false,
+      category: 'Snacks', isHalal: true,
       originalPrice: 5, discountedPrice: 3, quantityAvailable: 5,
       pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(2), allergens: ['gluten', 'egg'],
     }),
@@ -38,7 +38,7 @@ function sampleListings([stall1, stall2, stall3]) {
       title: 'Assorted Kuih Box', description: 'Box of 6 mixed kuih',
       category: 'Desserts', isHalal: true,
       originalPrice: 6, discountedPrice: 3.5, quantityAvailable: 0, soldCount: 3,
-      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['coconut', 'gluten'], status: 'sold_out',
+      pickupStart: hoursFromNow(1), pickupEnd: hoursFromNow(3), allergens: ['coconut', 'gluten'],
     }),
   ];
 }

@@ -9,6 +9,7 @@ const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const Cart = require('../src/models/Cart');
+const Favourite = require('../src/models/Favourite');
 const photoService = require('../src/services/photoService');
 const accountService = require('../src/services/accountService');
 const { signToken } = require('../src/services/tokenService');
@@ -39,6 +40,7 @@ beforeEach(() => {
   mock.method(Listing, 'deleteMany', async (filter) => deleted.push(['listings', filter]));
   mock.method(Vendor, 'deleteOne', async (filter) => deleted.push(['vendor', filter]));
   mock.method(Cart, 'deleteOne', async (filter) => deleted.push(['cart', filter]));
+  mock.method(Favourite, 'deleteMany', async (filter) => deleted.push(['favourites', filter]));
   mock.method(User, 'deleteOne', async (filter) => deleted.push(['user', filter]));
   mock.method(photoService, 'remove', async (id) => deleted.push(['photo', id]));
   mock.method(User.prototype, 'save', async function save() { return this; });
@@ -49,14 +51,17 @@ test('a vendor deletion removes listings, profile, photo and user, and leaves or
   const user = makeUser('vendor', { photoId: 'photo-1' });
   const token = signedInAs(user);
   const orderDelete = mock.method(Order, 'deleteMany', async () => ({}));
+  Listing.distinct.mock.mockImplementation(async (field) => (field === '_id' ? ['listing-1'] : []));
 
   const res = await call('/api/users/me', { method: 'DELETE', token, body: { password: PASSWORD } });
 
   assert.equal(res.status, 200);
   assert.deepEqual(deleted, [
+    ['favourites', { listing: { $in: ['listing-1'] } }],
     ['listings', { vendor: 'vendor-1' }],
     ['vendor', { _id: 'vendor-1' }],
     ['cart', { customer: user._id }],
+    ['favourites', { customer: user._id }],
     ['user', { _id: user._id }],
     ['photo', 'photo-1'],
   ]);
@@ -73,7 +78,7 @@ test("a vendor deletion also deletes their listings' photos, but not sample phot
   assert.deepEqual(deleted.filter(([what]) => what === 'photo'), [['photo', 'savespoon/listing-photos/a']]);
 });
 
-test('a customer deletion removes the cart and user only', async () => {
+test('a customer deletion removes the cart, Favourites and user only', async () => {
   const user = makeUser('customer');
   const token = signedInAs(user);
   const vendorLookup = Vendor.findOne;
@@ -82,7 +87,11 @@ test('a customer deletion removes the cart and user only', async () => {
   const res = await call('/api/users/me', { method: 'DELETE', token, body: { password: PASSWORD } });
 
   assert.equal(res.status, 200);
-  assert.deepEqual(deleted.map(([what]) => what), ['cart', 'user']);
+  assert.deepEqual(deleted, [
+    ['cart', { customer: user._id }],
+    ['favourites', { customer: user._id }],
+    ['user', { _id: user._id }],
+  ]);
   assert.equal(vendorLookup.mock.callCount(), 0);
 });
 
