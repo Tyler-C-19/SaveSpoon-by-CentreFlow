@@ -9,6 +9,7 @@ const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const SalesRecord = require('../src/models/SalesRecord');
+const Favourite = require('../src/models/Favourite');
 const photoService = require('../src/services/photoService');
 const listingPhotos = require('../src/services/listingPhotoService');
 const { signToken } = require('../src/services/tokenService');
@@ -276,6 +277,7 @@ test('deleting a listing deletes its photo', async () => {
   mock.method(Order, 'countDocuments', async () => 0);
   mock.method(SalesRecord, 'create', async (doc) => ({ _id: new mongoose.Types.ObjectId(), ...doc }));
   mock.method(Listing, 'deleteOne', async () => ({ deletedCount: 1 }));
+  mock.method(Favourite, 'deleteMany', async () => ({ deletedCount: 0 }));
 
   const res = await call(`/api/listings/${listing.id}`, { method: 'DELETE', token });
 

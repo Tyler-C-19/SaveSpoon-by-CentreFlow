@@ -10,6 +10,7 @@ const Vendor = require('../src/models/Vendor');
 const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const SalesRecord = require('../src/models/SalesRecord');
+const Favourite = require('../src/models/Favourite');
 const { signToken } = require('../src/services/tokenService');
 const { call } = require('./testServer');
 
@@ -54,7 +55,8 @@ function ownListing(listing, { activeOrders = 0, deleted = 1 } = {}) {
   const create = mock.method(SalesRecord, 'create', async (doc) => ({ _id: new mongoose.Types.ObjectId(), ...doc }));
   const removeRecord = mock.method(SalesRecord, 'deleteOne', async () => ({ deletedCount: 1 }));
   const remove = mock.method(Listing, 'deleteOne', async () => ({ deletedCount: deleted }));
-  return { token, count, create, removeRecord, remove };
+  const unfavourite = mock.method(Favourite, 'deleteMany', async () => ({ deletedCount: 0 }));
+  return { token, count, create, removeRecord, remove, unfavourite };
 }
 
 const url = (listing) => `/api/listings/${listing?.id ?? new mongoose.Types.ObjectId()}`;
@@ -77,6 +79,27 @@ test("deleting another vendor's listing returns 404", async () => {
   assert.equal(res.status, 404);
   assert.equal(res.body.code, 'LISTING_NOT_FOUND');
   assert.equal(remove.mock.callCount(), 0);
+});
+
+test('deleting a listing also removes it from Favourites', async () => {
+  const listing = makeListing();
+  const { token, unfavourite } = ownListing(listing);
+  const res = await call(url(listing), { method: 'DELETE', token });
+  assert.equal(res.status, 200);
+  const [filter] = unfavourite.mock.calls[0].arguments;
+  assert.deepEqual(filter, { listing: listing._id });
+});
+
+test('a failed or blocked deletion leaves Favourites alone', async () => {
+  const listing = makeListing();
+  const blocked = ownListing(listing, { activeOrders: 1 });
+  await call(url(listing), { method: 'DELETE', token: blocked.token });
+  assert.equal(blocked.unfavourite.mock.callCount(), 0);
+  mock.restoreAll();
+
+  const missing = ownListing(listing, { deleted: 0 });
+  await call(url(listing), { method: 'DELETE', token: missing.token });
+  assert.equal(missing.unfavourite.mock.callCount(), 0);
 });
 
 test('active orders block deletion', async () => {

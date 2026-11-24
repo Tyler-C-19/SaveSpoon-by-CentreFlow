@@ -14,6 +14,8 @@ const {
   relistError,
 } = require('../validators/listingValidators');
 const SalesRecord = require('../models/SalesRecord');
+const Favourite = require('../models/Favourite');
+const { parseFilters, filterMatch } = require('../validators/searchFilters');
 const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
@@ -26,6 +28,7 @@ const PAGE_SIZE = 20;
 const RUNNING_OUT_SIZE = 6;
 const OTHER_STALLS_SIZE = 6;
 const OTHER_LISTINGS_SIZE = 4;
+const FAVOURITES_STRIP_SIZE = 6;
 const TOP_RESULTS = 3;
 const SEARCH_MAX_LENGTH = 50;
 const PAGE_PATTERN = /^[1-9]\d{0,4}$/;
@@ -69,6 +72,29 @@ const publicFields = {
 // Relisted items count as newest from when they went back on sale.
 const withListedAt = { $addFields: { _listedAt: { $ifNull: ['$listedAt', '$createdAt'] } } };
 const NEWEST_FIRST = { _listedAt: -1, _id: -1 };
+
+// Share of the original price saved; 0 when there is no original price.
+const withSaving = {
+  $addFields: {
+    _saving: {
+      $cond: [
+        { $gt: ['$originalPrice', 0] },
+        { $divide: [{ $subtract: ['$originalPrice', '$discountedPrice'] }, '$originalPrice'] },
+        0,
+      ],
+    },
+  },
+};
+
+const SORT_ORDERS = {
+  best: { _score: -1, ...NEWEST_FIRST },
+  newest: NEWEST_FIRST,
+  price_asc: { discountedPrice: 1, ...NEWEST_FIRST },
+  price_desc: { discountedPrice: -1, ...NEWEST_FIRST },
+  ending: { pickupEnd: 1, ...NEWEST_FIRST },
+  sold: { soldCount: -1, ...NEWEST_FIRST },
+  saving: { _saving: -1, ...NEWEST_FIRST },
+};
 
 function availablePipeline({ now, stock, sort, skip = 0, limit }) {
   return [
@@ -118,11 +144,11 @@ function wordScore(word) {
   };
 }
 
-function searchStages(now, { text, words }) {
+function searchStages(now, { text, words }, extraMatch = {}) {
   const wordFields = Object.fromEntries(words.map((word, index) => [`_word${index}`, wordScore(word)]));
   const wordKeys = words.map((_, index) => `$_word${index}`);
   return [
-    availableMatch(now),
+    { $match: { ...availableMatch(now).$match, ...extraMatch } },
     ...withStall,
     { $addFields: wordFields },
     { $match: { $expr: { $and: wordKeys.map((key) => ({ $gt: [key, 0] })) } } },
@@ -169,25 +195,63 @@ async function search(req, res) {
   if (typeof page !== 'string' || !PAGE_PATTERN.test(page)) {
     return res.status(400).json({ error: 'Page must be a whole number.' });
   }
-  const length = typeof q === 'string' ? q.trim().replace(/\s+/g, ' ').length : 0;
-  if (length < 1 || length > SEARCH_MAX_LENGTH) {
-    return res.status(400).json({ error: `Enter 1 to ${SEARCH_MAX_LENGTH} characters to search.` });
+  const filters = parseFilters(req.query);
+  if (filters.error) return res.status(400).json({ error: filters.error });
+
+  // The keyword is optional once a filter or sort is chosen.
+  const hasKeyword = q !== undefined;
+  if (hasKeyword || (!filters.filtered && !filters.sort)) {
+    const length = typeof q === 'string' ? q.trim().replace(/\s+/g, ' ').length : 0;
+    if (length < 1 || length > SEARCH_MAX_LENGTH) {
+      return res.status(400).json({ error: `Enter 1 to ${SEARCH_MAX_LENGTH} characters to search.` });
+    }
+  }
+  if (filters.sort === 'best' && !hasKeyword) {
+    return res.status(400).json({ error: 'Best Match needs a keyword.' });
   }
 
   const now = new Date();
-  const words = searchWords(q);
+  const match = filterMatch(filters, now);
+  if (filters.favourites) {
+    match._id = { $in: await Favourite.distinct('listing', { customer: req.user._id }) };
+  }
+  const sort = filters.sort ?? (hasKeyword ? 'best' : 'newest');
+  const words = hasKeyword ? searchWords(q) : null;
   const found = await Listing.aggregate([
-    ...searchStages(now, words),
+    ...(words ? searchStages(now, words, match) : [{ $match: { ...availableMatch(now).$match, ...match } }, ...withStall]),
     withListedAt,
-    { $sort: { _score: -1, ...NEWEST_FIRST } },
+    ...(sort === 'saving' ? [withSaving] : []),
+    { $sort: SORT_ORDERS[sort] },
     { $skip: (Number(page) - 1) * PAGE_SIZE },
     { $limit: PAGE_SIZE + 1 },
     searchFields,
   ]);
   const listings = found.slice(0, PAGE_SIZE);
   const body = { listings, hasMore: found.length > PAGE_SIZE };
-  if (page === '1') body.otherStalls = await otherStalls(now, words, listings);
+  if (page === '1') {
+    const plain = words && !filters.filtered && sort === 'best';
+    body.otherStalls = plain ? await otherStalls(now, words, listings) : [];
+  }
   return res.json(body);
+}
+
+// The customer's Favourites that are on sale now, most recently added first.
+async function getFavourites(req, res) {
+  const saved = await Favourite.find({ customer: req.user._id }).sort({ createdAt: -1, _id: -1 }).select('listing');
+  const ids = saved.map((item) => item.listing);
+  if (!ids.length) return res.json({ listings: [], hasMore: false });
+
+  const found = await Listing.aggregate([
+    { $match: { ...availableMatch(new Date()).$match, _id: { $in: ids } } },
+    ...withStall,
+    publicFields,
+  ]);
+  const position = new Map(ids.map((id, index) => [String(id), index]));
+  found.sort((a, b) => position.get(String(a._id)) - position.get(String(b._id)));
+  return res.json({
+    listings: found.slice(0, FAVOURITES_STRIP_SIZE),
+    hasMore: found.length > FAVOURITES_STRIP_SIZE,
+  });
 }
 
 async function getAvailable(req, res) {
@@ -598,6 +662,7 @@ async function deleteListing(req, res) {
     await undoRecord();
     return res.status(404).json(LISTING_NOT_FOUND);
   }
+  await Favourite.deleteMany({ listing: listing._id });
   await listingPhotos.removeQuietly(listing.imageId);
   return res.json({ deleted: true, listingId: String(listing._id) });
 }
@@ -627,6 +692,7 @@ module.exports = {
   createListing,
   getAvailable,
   getRunningOut,
+  getFavourites,
   search,
   getDetails,
   getVendorInfo,
