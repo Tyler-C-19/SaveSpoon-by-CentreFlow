@@ -5,10 +5,18 @@ import '../../domain/listing.dart';
 import 'listing_card.dart';
 
 class RunningOutStrip extends StatelessWidget {
-  const RunningOutStrip({super.key, required this.listings, this.onOpen});
+  const RunningOutStrip({
+    super.key,
+    required this.listings,
+    this.onOpen,
+    this.onShowVendor,
+    this.onPressDown,
+  });
 
   final List<Listing> listings;
   final ValueChanged<Listing>? onOpen;
+  final ValueChanged<Listing>? onShowVendor;
+  final ValueChanged<Listing>? onPressDown;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +39,12 @@ class RunningOutStrip extends StatelessWidget {
                 listing: listings[index],
                 showBadges: true,
                 onTap: onOpen == null ? null : () => onOpen!(listings[index]),
+                onShowVendor: onShowVendor == null
+                    ? null
+                    : () => onShowVendor!(listings[index]),
+                onPressDown: onPressDown == null
+                    ? null
+                    : () => onPressDown!(listings[index]),
               ),
             ),
           );

@@ -6,7 +6,13 @@ import 'listing_card.dart';
 import 'listing_image.dart';
 
 class SearchResultRow extends StatelessWidget {
-  const SearchResultRow({super.key, required this.listing, this.onTap});
+  const SearchResultRow({
+    super.key,
+    required this.listing,
+    this.onTap,
+    this.onShowVendor,
+    this.onPressDown,
+  });
 
   // The photo is up to this wide, and never more than 40% of the row.
   static const double thumbnailSize = 140;
@@ -17,6 +23,10 @@ class SearchResultRow extends StatelessWidget {
 
   final Listing listing;
   final VoidCallback? onTap;
+  // A long-press shows the stall.
+  final VoidCallback? onShowVendor;
+  // A finger touching the row, before it's a tap.
+  final VoidCallback? onPressDown;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +43,8 @@ class SearchResultRow extends StatelessWidget {
       child: InkWell(
         key: ValueKey('search-result-${listing.id}'),
         onTap: onTap,
+        onLongPress: onShowVendor,
+        onTapDown: onPressDown == null ? null : (_) => onPressDown!(),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -40,7 +52,7 @@ class SearchResultRow extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: SizedBox(
-            height: MediaQuery.textScalerOf(context).scale(contentHeight),
+            height: _textGrowth(context) * contentHeight,
             child: LayoutBuilder(
               builder: (context, constraints) => Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -117,6 +129,12 @@ class SearchResultRow extends StatelessWidget {
       ),
     );
   }
+
+  // Android grows small text far more than a large size like the row height,
+  // so the row grows by as much as its smallest text does.
+  static double _textGrowth(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(_smallestText) / _smallestText;
+  static const double _smallestText = 12;
 }
 
 class _Thumbnail extends StatelessWidget {

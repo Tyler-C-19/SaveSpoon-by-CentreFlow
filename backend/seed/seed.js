@@ -15,15 +15,16 @@ const { sampleListings, STALL_NAMES } = require('./sampleListings');
 const { sampleOrders, sampleCart, SEED_REQUEST_PREFIX } = require('./sampleOrders');
 const { sampleSearchListings, sampleRefreshOps } = require('./sampleSearchListings');
 const { applySeedImages } = require('./sampleImages');
+const { SAMPLE_ACCOUNTS, missingAccounts, missingStalls } = require('./sampleAccounts');
 const photoService = require('../src/services/photoService');
 
 const LISTINGS_FLAG = '--listings';
 const SEARCH_SAMPLES_FLAG = '--search-samples';
 const SALES_RECORDS_FLAG = '--sales-records';
 const IMAGES_FLAG = '--images';
+const RESTORE_ACCOUNTS_FLAG = '--restore-accounts';
 const CUSTOMER_EMAILS = ['customer1@savespoon.test', 'customer2@savespoon.test'];
 const VENDOR_EMAILS = ['vendor1@savespoon.test', 'vendor2@savespoon.test', 'vendor3@savespoon.test'];
-const point = (lng, lat) => ({ type: 'Point', coordinates: [lng, lat] });
 
 async function addOrdersAndCart(customers, listings, stalls) {
   await Order.deleteMany({ requestId: { $regex: `^${SEED_REQUEST_PREFIX}` } });
@@ -144,7 +145,51 @@ async function seedSalesRecordsOnly() {
   console.log(`Seeded: ${records.length} sales records. Other data unchanged.`);
 }
 
+// Re-creates only the sample accounts that are gone, and any sample vendor's
+// stall that is gone, with that stall's sample listings.
+async function restoreAccounts() {
+  await mongoose.connect(process.env.MONGODB_URI);
+  await Promise.all([User.init(), Vendor.init(), Listing.init()]);
+
+  const emails = SAMPLE_ACCOUNTS.map((account) => account.user.email);
+  const existing = await User.find({ email: { $in: emails } });
+  const missing = missingAccounts(existing.map((user) => user.email));
+  const passwordHash = await bcrypt.hash('Password123', 10);
+  const added = missing.length
+    ? await User.insertMany(missing.map(({ user }) => ({ passwordHash, emailVerified: true, ...user })))
+    : [];
+
+  const users = [...existing, ...added];
+  const stalls = await Vendor.find({ user: { $in: users.map((user) => user._id) } });
+  const vendors = missingStalls(users, stalls);
+  const restored = vendors.length
+    ? await Vendor.insertMany(vendors.map(({ stall, userId }) => ({ user: userId, ...stall })))
+    : [];
+
+  // sampleListings takes the three stalls in seed order; only restored stalls get listings.
+  const slots = [0, 1, 2].map((index) => {
+    const position = vendors.findIndex((account) => account.index === index);
+    return position === -1 ? { _id: null } : restored[position];
+  });
+  const fresh = sampleListings(slots).filter((listing) => listing.vendor);
+  const listings = fresh.length ? await Listing.insertMany(fresh) : [];
+  if (listings.length) await addImages(listings);
+
+  if (!added.length && !restored.length) {
+    console.log('Every sample account and stall exists, so nothing changed.');
+    return;
+  }
+  if (added.length) console.log(`Restored accounts: ${added.map((user) => user.email).join(', ')}.`);
+  if (restored.length) console.log(`Restored stalls: ${restored.map((stall) => stall.stallName).join(', ')}.`);
+  console.log(`Added ${listings.length} sample listings. Other data unchanged.`);
+  if (added.length) console.log('Test login password for restored accounts: Password123');
+}
+
 async function seed() {
+  if (process.argv.includes(RESTORE_ACCOUNTS_FLAG)) {
+    await restoreAccounts();
+    return;
+  }
   if (process.argv.includes(IMAGES_FLAG)) {
     await seedImagesOnly();
     return;
@@ -191,28 +236,14 @@ async function seed() {
   const passwordHash = await bcrypt.hash('Password123', 10);
   const account = (fields) => ({ passwordHash, emailVerified: true, ...fields });
 
-  const [vendorUser1, vendorUser2, vendorUser3, customer1, customer2] = await User.insertMany([
-    account({ name: 'Pak Din', email: 'vendor1@savespoon.test', phone: '012-3456781', role: 'vendor' }),
-    account({ name: 'Cendana Owner', email: 'vendor2@savespoon.test', phone: '012-3456782', role: 'vendor' }),
-    account({ name: 'Kak Ina', email: 'vendor3@savespoon.test', phone: '012-3456783', role: 'vendor' }),
-    account({ name: 'Customer One', email: 'customer1@savespoon.test', phone: '012-3456784', role: 'customer' }),
-    account({ name: 'Customer Two', email: 'customer2@savespoon.test', phone: '012-3456785', role: 'customer' }),
-  ]);
+  const [vendorUser1, vendorUser2, vendorUser3, customer1, customer2] = await User.insertMany(
+    SAMPLE_ACCOUNTS.map(({ user }) => account(user))
+  );
 
-  const [stall1, stall2, stall3] = await Vendor.insertMany([
-    {
-      user: vendorUser1._id, stallName: 'Warung Pak Din', description: 'Nasi campur and home-style dishes',
-      address: 'Cafeteria A, UTM Skudai', phone: '012-3456781', location: point(103.6385, 1.5590), verified: true,
-    },
-    {
-      user: vendorUser2._id, stallName: 'Kafe Cendana', description: 'Mamak-style noodles and roti',
-      address: 'Cafeteria B, UTM Skudai', phone: '012-3456782', location: point(103.6410, 1.5565), verified: true,
-    },
-    {
-      user: vendorUser3._id, stallName: 'Roti Bakar Kak Ina', description: 'Toast, sandwiches and kuih',
-      address: 'Kiosk near Library, UTM Skudai', phone: '012-3456783', location: point(103.6372, 1.5578), verified: false,
-    },
-  ]);
+  const vendorUsers = [vendorUser1, vendorUser2, vendorUser3];
+  const [stall1, stall2, stall3] = await Vendor.insertMany(
+    SAMPLE_ACCOUNTS.filter((item) => item.stall).map(({ stall }, index) => ({ user: vendorUsers[index]._id, ...stall }))
+  );
 
   const stalls = [stall1, stall2, stall3];
   const listings = await Listing.insertMany(sampleListings(stalls));

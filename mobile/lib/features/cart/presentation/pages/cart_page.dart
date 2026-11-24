@@ -12,6 +12,7 @@ import '../../../orders/presentation/widgets/confirm_order_dialog.dart';
 import '../../domain/cart.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/cart_item_tile.dart';
+import '../widgets/cart_stall_heading.dart';
 
 const String _placeFailed = "We couldn't place your order. Please try again.";
 
@@ -243,10 +244,7 @@ class _CartPageState extends State<CartPage> {
         const SizedBox(height: AppSpacing.md),
         for (final warning in cart.warnings) _Warning(text: warning),
         for (final group in cart.itemsByStall.entries) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-            child: Text('From ${group.key}', style: theme.textTheme.titleSmall),
-          ),
+          CartStallHeading(stallName: group.key, items: group.value),
           for (final item in group.value)
             CartItemTile(
               item: item,

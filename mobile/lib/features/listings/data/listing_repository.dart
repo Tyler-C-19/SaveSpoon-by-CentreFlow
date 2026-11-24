@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../../profile/domain/photo_crop.dart';
+import '../../seller_profile/domain/vendor_info.dart';
 import '../domain/listing.dart';
 
 class AllergenSuggestion {
@@ -89,6 +90,40 @@ class ListingRepository {
   Future<Listing> fetchDetails(String id) async {
     final data = await api.get('/api/listings/$id');
     return Listing.fromJson(data['listing'] as Map<String, dynamic>);
+  }
+
+  // Vendor info is kept briefly so the pane can open already filled.
+  static const Duration vendorInfoFresh = Duration(seconds: 30);
+  final Map<String, (DateTime, VendorInfo)> _vendorInfo = {};
+  final Map<String, Future<VendorInfo>> _vendorInfoLoading = {};
+
+  VendorInfo? cachedVendorInfo(String listingId) => _vendorInfo[listingId]?.$2;
+
+  bool isVendorInfoFresh(String listingId) {
+    final saved = _vendorInfo[listingId];
+    return saved != null &&
+        DateTime.now().difference(saved.$1) < vendorInfoFresh;
+  }
+
+  Future<VendorInfo> fetchVendorInfo(String listingId) =>
+      _vendorInfoLoading[listingId] ??= _loadVendorInfo(listingId);
+
+  Future<VendorInfo> _loadVendorInfo(String listingId) async {
+    try {
+      final data = await api.get('/api/listings/$listingId/vendor');
+      final info = VendorInfo.fromJson(data);
+      _vendorInfo[listingId] = (DateTime.now(), info);
+      return info;
+    } finally {
+      _vendorInfoLoading.remove(listingId);
+    }
+  }
+
+  // Starts loading early, for example when a card is touched; the pane shows
+  // any error itself.
+  void prefetchVendorInfo(String listingId) {
+    if (isVendorInfoFresh(listingId)) return;
+    fetchVendorInfo(listingId).ignore();
   }
 
   Future<Listing> create({

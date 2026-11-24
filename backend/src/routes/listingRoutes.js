@@ -21,6 +21,7 @@ router.delete('/:id/photo', requireRole('vendor'), photos.removePhoto);
 router.patch('/:id', requireRole('vendor'), listings.updateListing);
 router.delete('/:id', requireRole('vendor'), listings.deleteListing);
 router.post('/allergen-suggestions', requireRole('vendor'), listings.suggestAllergens);
+router.get('/:id/vendor', requireRole('customer'), listings.getVendorInfo);
 router.get('/:id', requireRole('customer'), listings.getDetails);
 
 module.exports = router;

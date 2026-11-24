@@ -82,6 +82,9 @@ class _Server {
     if (request.url.path.endsWith('/running-out')) {
       return jsonResponse({'listings': runningOut});
     }
+    if (request.url.path.endsWith('/vendor')) {
+      return jsonResponse({'error': 'Not used here'}, 404);
+    }
     searches.add(request.url);
     await hold?.future;
     if (fail) return jsonResponse({'error': 'Server is down'}, 500);
