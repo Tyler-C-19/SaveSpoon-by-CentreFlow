@@ -92,6 +92,7 @@ Future<_Harness> _open(
       providers: [
         Provider<ListingRepository>(create: (_) => ListingRepository(api)),
         Provider<OrderRepository>(create: (_) => OrderRepository(api)),
+        favouritesProvider((_) async => jsonResponse({'listingIds': []})),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -333,6 +334,7 @@ void main() {
         providers: [
           Provider<ListingRepository>(create: (_) => ListingRepository(api)),
           Provider<OrderRepository>(create: (_) => OrderRepository(api)),
+          favouritesProvider((_) async => jsonResponse({'listingIds': []})),
         ],
         child: MaterialApp(
           theme: AppTheme.light,

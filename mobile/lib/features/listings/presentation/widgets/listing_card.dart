@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
+import 'favourite_button.dart';
+import 'icon_scale.dart';
 import 'listing_image.dart';
 
 String pickupLabel(BuildContext context, Listing listing) =>
@@ -31,9 +33,16 @@ class ListingCard extends StatelessWidget {
     this.onShowVendor,
     this.onPressDown,
     this.inStallPane = false,
+    this.actions,
+    this.actionsWidth = 0,
   });
 
   static const double browseHeight = 250;
+
+  // Cards with buttons grow with large text by as much as their buttons do,
+  // so the photo keeps its size.
+  static double heightWithActions(BuildContext context) =>
+      browseHeight + ListingIconButton.compactSize * (iconScale(context) - 1);
 
   final Listing listing;
   final bool showBadges;
@@ -48,6 +57,10 @@ class ListingCard extends StatelessWidget {
   final VoidCallback? onPressDown;
   // In the vendor pane: no stall line, and the stock line shows in its place.
   final bool inStallPane;
+  // Customer cards only: buttons at the bottom right, such as the heart, in a
+  // row of their own under the text.
+  final Widget? actions;
+  final double actionsWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +252,14 @@ class ListingCard extends StatelessWidget {
                       icon: Icons.info_outline,
                       text: 'Allergens: ${listing.allergenSummary}',
                     ),
+                    // The buttons sit over the right of this row, reaching
+                    // into the padding below.
+                    if (actions != null)
+                      SizedBox(
+                        height:
+                            ListingIconButton.compactSize * iconScale(context) -
+                            AppSpacing.sm,
+                      ),
                   ],
                 ),
               ),
@@ -279,6 +300,8 @@ class ListingCard extends StatelessWidget {
               ),
             ),
           ?tapArea,
+          // Above the tap area, so the buttons take their own taps.
+          if (actions != null) Positioned(right: 0, bottom: 0, child: actions!),
         ],
       );
     }
@@ -371,7 +394,7 @@ class _InfoLine extends StatelessWidget {
       padding: const EdgeInsets.only(top: 2),
       child: Row(
         children: [
-          Icon(icon, size: 13, color: AppColors.textMuted),
+          Icon(icon, size: 13 * iconScale(context), color: AppColors.textMuted),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(

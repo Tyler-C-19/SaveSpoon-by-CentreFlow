@@ -45,7 +45,8 @@ async function addItem(req, res) {
     });
   }
 
-  const wanted = quantity + (existing?.quantity ?? 0);
+  const before = existing?.quantity ?? 0;
+  const wanted = quantity + before;
   const kept = Math.min(wanted, listing.quantityAvailable);
   if (existing) {
     existing.quantity = kept;
@@ -62,7 +63,8 @@ async function addItem(req, res) {
 
   const { title } = listing;
   let message = `Added ${quantity} x ${title} to your cart.`;
-  if (kept < wanted) message = `Only ${kept} ${title} left, so your cart now has ${kept}.`;
+  if (existing && kept === before) message = `Your cart already has all ${kept} ${title} left.`;
+  else if (kept < wanted) message = `Only ${kept} ${title} left, so your cart now has ${kept}.`;
   else if (existing) message = `Added ${quantity} more ${title}. Your cart now has ${kept}.`;
   return sendCart(res, cart, message);
 }

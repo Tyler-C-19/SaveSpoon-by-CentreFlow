@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
+import 'favourite_button.dart';
+import 'icon_scale.dart';
 import 'listing_card.dart';
 import 'listing_image.dart';
 
@@ -12,6 +14,7 @@ class SearchResultRow extends StatelessWidget {
     this.onTap,
     this.onShowVendor,
     this.onPressDown,
+    this.actions,
   });
 
   // The photo is up to this wide, and never more than 40% of the row.
@@ -27,6 +30,8 @@ class SearchResultRow extends StatelessWidget {
   final VoidCallback? onShowVendor;
   // A finger touching the row, before it's a tap.
   final VoidCallback? onPressDown;
+  // Buttons at the bottom right, such as the heart.
+  final Widget? actions;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +57,11 @@ class SearchResultRow extends StatelessWidget {
           ),
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: SizedBox(
-            height: _textGrowth(context) * contentHeight,
+            height:
+                _textGrowth(context) * contentHeight +
+                (_actionsBelow(context)
+                    ? ListingIconButton.compactSize * iconScale(context)
+                    : 0),
             child: LayoutBuilder(
               builder: (context, constraints) => Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -109,15 +118,19 @@ class SearchResultRow extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
-                        _InfoLine(
-                          icon: Icons.schedule,
-                          text: pickupLabel(context, listing),
-                        ),
-                        if (listing.pickupAddress != null)
+                        _besideActions(
+                          context,
                           _InfoLine(
-                            icon: Icons.place_outlined,
-                            text: listing.pickupAddress!,
+                            icon: Icons.schedule,
+                            text: pickupLabel(context, listing),
                           ),
+                          listing.pickupAddress == null
+                              ? null
+                              : _InfoLine(
+                                  icon: Icons.place_outlined,
+                                  text: listing.pickupAddress!,
+                                ),
+                        ),
                       ],
                     ),
                   ),
@@ -127,6 +140,37 @@ class SearchResultRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  // With very large text the buttons go under the lines instead of beside
+  // them, and the row grows to fit.
+  bool _actionsBelow(BuildContext context) =>
+      actions != null && iconScale(context) > 1.5;
+
+  // The pickup and address lines, with the buttons at the bottom right.
+  Widget _besideActions(BuildContext context, Widget pickup, Widget? address) {
+    final lines = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [pickup, ?address],
+    );
+    if (actions == null) return lines;
+    if (_actionsBelow(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          lines,
+          Align(alignment: Alignment.centerRight, child: actions),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: lines),
+        const SizedBox(width: AppSpacing.xs),
+        actions!,
+      ],
     );
   }
 
@@ -306,7 +350,7 @@ class _InfoLine extends StatelessWidget {
       padding: const EdgeInsets.only(top: 2),
       child: Row(
         children: [
-          Icon(icon, size: 13, color: AppColors.textMuted),
+          Icon(icon, size: 13 * iconScale(context), color: AppColors.textMuted),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(

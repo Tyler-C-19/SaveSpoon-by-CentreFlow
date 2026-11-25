@@ -16,6 +16,7 @@ import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/category_picker.dart';
+import '../widgets/favourite_button.dart';
 import '../widgets/listing_card.dart';
 import '../widgets/listing_image.dart';
 import 'photo_view_page.dart';
@@ -164,7 +165,18 @@ class _FoodDetailsPageState extends State<FoodDetailsPage> {
   Widget build(BuildContext context) {
     final listing = _listing;
     return Scaffold(
-      appBar: AppBar(title: const Text('Food Details')),
+      appBar: AppBar(
+        title: const Text('Food Details'),
+        actions: [
+          if (listing != null)
+            FavouriteButton(
+              listingId: listing.id,
+              size: 48,
+              maxSize: kToolbarHeight,
+            ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+      ),
       body: listing != null
           ? _Details(
               listing: listing,

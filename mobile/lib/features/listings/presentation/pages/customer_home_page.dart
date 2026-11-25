@@ -14,6 +14,11 @@ import '../widgets/listing_image.dart';
 import '../widgets/listing_card.dart';
 import '../widgets/running_out_strip.dart';
 import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
+import '../widgets/favourites_strip.dart';
+import '../widgets/icon_scale.dart';
+import '../widgets/quick_add_button.dart';
+import '../../domain/search_filters.dart';
+import '../providers/search_shortcut.dart';
 
 class CustomerHomePage extends StatefulWidget {
   const CustomerHomePage({super.key, required this.name});
@@ -24,19 +29,32 @@ class CustomerHomePage extends StatefulWidget {
   State<CustomerHomePage> createState() => _CustomerHomePageState();
 }
 
-class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
-  static const double _cardHeight = ListingCard.browseHeight;
+class _CustomerHomePageState extends State<CustomerHomePage>
+    with AutoRefresh, SingleTickerProviderStateMixin {
   static const double _loadMoreDistance = 400;
-  static const SliverGridDelegate _gridLayout =
+
+  // Cards are taller by the row of buttons under their text.
+  static SliverGridDelegate _gridLayout(BuildContext context) =>
       SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisExtent: _cardHeight,
+        mainAxisExtent: ListingCard.heightWithActions(context),
         mainAxisSpacing: AppSpacing.sm,
         crossAxisSpacing: AppSpacing.sm,
       );
 
   final ScrollController _scroll = ScrollController();
   late final ListingChanges _changes;
+  // Home fades and rises in once its first load and Your Favourites are both
+  // back, like Search's start screen.
+  late final AnimationController _appear = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 500),
+  );
+  late final Animation<double> _appearCurve = CurvedAnimation(
+    parent: _appear,
+    curve: Curves.easeOutCubic,
+  );
+  bool _favouritesBack = false;
 
   List<Listing>? _listings;
   List<Listing> _runningOut = const [];
@@ -60,6 +78,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
   @override
   void dispose() {
     _changes.removeListener(_load);
+    _appear.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -208,7 +227,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
         SliverPadding(
           padding: sidePadding,
           sliver: SliverGrid.builder(
-            gridDelegate: _gridLayout,
+            gridDelegate: _gridLayout(context),
             itemCount: 4,
             itemBuilder: (context, index) => DecoratedBox(
               key: const ValueKey('listing-placeholder'),
@@ -262,7 +281,7 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
       SliverPadding(
         padding: sidePadding,
         sliver: SliverGrid.builder(
-          gridDelegate: _gridLayout,
+          gridDelegate: _gridLayout(context),
           itemCount: listings.length,
           itemBuilder: (context, index) => ListingCard(
             listing: listings[index],
@@ -270,6 +289,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
             onTap: () => _open(listings[index]),
             onShowVendor: () => _showVendor(listings[index]),
             onPressDown: () => _prefetchVendor(listings[index]),
+            actions: ListingActions(listing: listings[index]),
+            actionsWidth: ListingActions.widthOf(context),
           ),
         ),
       ),
@@ -298,6 +319,24 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
 
   @override
   Widget build(BuildContext context) {
+    if (_appear.isDismissed &&
+        _favouritesBack &&
+        (_listings != null || _error != null)) {
+      _appear.forward();
+    }
+    return FadeTransition(
+      opacity: _appearCurve,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(0, 0.03),
+          end: Offset.zero,
+        ).animate(_appearCurve),
+        child: _content(context),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final theme = Theme.of(context);
     final now = DateTime.now();
     final runningOut = [
@@ -340,6 +379,24 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
                 ),
               ),
             ),
+            SliverToBoxAdapter(
+              child: FavouritesStrip(
+                heading: _SectionTitle(
+                  icon: Icons.favorite,
+                  color: theme.colorScheme.error,
+                  text: 'Your Favourites',
+                ),
+                refreshWith: _listings,
+                onOpen: _open,
+                onShowVendor: _showVendor,
+                onPressDown: _prefetchVendor,
+                onFirstLoad: () => setState(() => _favouritesBack = true),
+                onSeeAll: () => SearchShortcut.open(
+                  context,
+                  const SearchFilters(favouritesOnly: true),
+                ),
+              ),
+            ),
             if (runningOut.isNotEmpty) ...[
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
@@ -362,6 +419,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
                   onOpen: _open,
                   onShowVendor: _showVendor,
                   onPressDown: _prefetchVendor,
+                  actionsFor: (listing) => ListingActions(listing: listing),
+                  actionsWidth: ListingActions.widthOf(context),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
@@ -389,6 +448,8 @@ class _CustomerHomePageState extends State<CustomerHomePage> with AutoRefresh {
                   onOpen: _open,
                   onShowVendor: _showVendor,
                   onPressDown: _prefetchVendor,
+                  actionsFor: (listing) => ListingActions(listing: listing),
+                  actionsWidth: ListingActions.widthOf(context),
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
@@ -472,12 +533,14 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 22, color: color),
+        Icon(icon, size: 22 * iconScale(context), color: color),
         const SizedBox(width: AppSpacing.xs),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.titleLarge
-              ?.copyWith(fontWeight: FontWeight.w700),
+        Flexible(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );

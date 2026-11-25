@@ -9,7 +9,9 @@ import 'package:savespoon/features/listings/data/listing_repository.dart';
 import 'package:savespoon/features/listings/domain/listing.dart';
 import 'package:savespoon/features/listings/presentation/pages/customer_home_page.dart';
 import 'package:savespoon/features/listings/presentation/providers/listing_changes.dart';
+import 'package:savespoon/features/listings/presentation/widgets/favourite_button.dart';
 import 'package:savespoon/features/listings/presentation/widgets/listing_card.dart';
+import 'package:savespoon/features/listings/presentation/widgets/quick_add_button.dart';
 import 'package:savespoon/features/listings/presentation/widgets/running_out_strip.dart';
 import 'package:savespoon/features/orders/data/order_repository.dart';
 
@@ -50,6 +52,7 @@ Future<void> _pump(
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
+  onRequest = withNoFavourites(onRequest);
   addTearDown(tester.view.reset);
   final api = ApiClient(
     client: MockClient((request) async {
@@ -67,6 +70,7 @@ Future<void> _pump(
         Provider<ListingRepository>(create: (_) => ListingRepository(api)),
         Provider<OrderRepository>(create: (_) => OrderRepository(api)),
         ChangeNotifierProvider<ListingChanges>(create: (_) => ListingChanges()),
+        favouritesProvider(onRequest),
       ],
       child: MaterialApp(
         theme: AppTheme.light,
@@ -79,9 +83,17 @@ Future<void> _pump(
 MockClientHandler _server({
   List<Map<String, dynamic>> listings = const [],
   List<Map<String, dynamic>> runningOut = const [],
+  List<Map<String, dynamic>> favourites = const [],
+  List<String> favouriteIds = const [],
 }) => (request) async {
   if (request.url.path.endsWith('/running-out')) {
     return jsonResponse({'listings': runningOut});
+  }
+  if (request.url.path.endsWith('/favourites')) {
+    return jsonResponse({'listings': favourites});
+  }
+  if (request.url.path.endsWith('/favourites/ids')) {
+    return jsonResponse({'listingIds': favouriteIds});
   }
   return jsonResponse({'listings': listings, 'hasMore': false});
 };
@@ -129,6 +141,7 @@ void main() {
           ChangeNotifierProvider<ListingChanges>(
             create: (_) => ListingChanges(),
           ),
+          favouritesProvider(_server()),
         ],
         child: MaterialApp(
           theme: AppTheme.light,
@@ -473,6 +486,29 @@ void main() {
       )) {
         expect(card.onShowVendor, isNotNull);
       }
+    });
+
+    testWidgets('cards have the heart and quick add', (tester) async {
+      await _pump(
+        tester,
+        _server(
+          listings: [_listing(id: 'a', title: 'Grid item')],
+        ),
+        onOrderAgain: (_) async => jsonResponse({
+          'listings': [_listing(id: 'c', title: 'Ordered before')],
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      final strip = find.byKey(const ValueKey('order-again-strip'));
+      expect(
+        find.descendant(of: strip, matching: find.byType(ListingActions)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: strip, matching: find.byType(FavouriteButton)),
+        findsOneWidget,
+      );
     });
 
     testWidgets('is hidden when nothing qualifies or the request fails', (

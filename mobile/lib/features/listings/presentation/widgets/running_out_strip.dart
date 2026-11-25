@@ -11,17 +11,24 @@ class RunningOutStrip extends StatelessWidget {
     this.onOpen,
     this.onShowVendor,
     this.onPressDown,
+    this.actionsFor,
+    this.actionsWidth = 0,
   });
 
   final List<Listing> listings;
   final ValueChanged<Listing>? onOpen;
   final ValueChanged<Listing>? onShowVendor;
   final ValueChanged<Listing>? onPressDown;
+  // Customer cards only: buttons such as the heart.
+  final Widget Function(Listing listing)? actionsFor;
+  final double actionsWidth;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: ListingCard.browseHeight,
+      height: actionsFor == null
+          ? ListingCard.browseHeight
+          : ListingCard.heightWithActions(context),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final cardWidth =
@@ -45,6 +52,8 @@ class RunningOutStrip extends StatelessWidget {
                 onPressDown: onPressDown == null
                     ? null
                     : () => onPressDown!(listings[index]),
+                actions: actionsFor?.call(listings[index]),
+                actionsWidth: actionsWidth,
               ),
             ),
           );
