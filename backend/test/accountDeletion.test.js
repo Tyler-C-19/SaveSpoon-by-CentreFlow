@@ -10,6 +10,7 @@ const Listing = require('../src/models/Listing');
 const Order = require('../src/models/Order');
 const Cart = require('../src/models/Cart');
 const Favourite = require('../src/models/Favourite');
+const Notification = require('../src/models/Notification');
 const photoService = require('../src/services/photoService');
 const accountService = require('../src/services/accountService');
 const { signToken } = require('../src/services/tokenService');
@@ -41,6 +42,7 @@ beforeEach(() => {
   mock.method(Vendor, 'deleteOne', async (filter) => deleted.push(['vendor', filter]));
   mock.method(Cart, 'deleteOne', async (filter) => deleted.push(['cart', filter]));
   mock.method(Favourite, 'deleteMany', async (filter) => deleted.push(['favourites', filter]));
+  mock.method(Notification, 'deleteMany', async (filter) => deleted.push(['notifications', filter]));
   mock.method(User, 'deleteOne', async (filter) => deleted.push(['user', filter]));
   mock.method(photoService, 'remove', async (id) => deleted.push(['photo', id]));
   mock.method(User.prototype, 'save', async function save() { return this; });
@@ -62,6 +64,7 @@ test('a vendor deletion removes listings, profile, photo and user, and leaves or
     ['vendor', { _id: 'vendor-1' }],
     ['cart', { customer: user._id }],
     ['favourites', { customer: user._id }],
+    ['notifications', { user: user._id }],
     ['user', { _id: user._id }],
     ['photo', 'photo-1'],
   ]);
@@ -78,7 +81,7 @@ test("a vendor deletion also deletes their listings' photos, but not sample phot
   assert.deepEqual(deleted.filter(([what]) => what === 'photo'), [['photo', 'savespoon/listing-photos/a']]);
 });
 
-test('a customer deletion removes the cart, Favourites and user only', async () => {
+test('a customer deletion removes the cart, Favourites, notifications and user only', async () => {
   const user = makeUser('customer');
   const token = signedInAs(user);
   const vendorLookup = Vendor.findOne;
@@ -90,6 +93,7 @@ test('a customer deletion removes the cart, Favourites and user only', async () 
   assert.deepEqual(deleted, [
     ['cart', { customer: user._id }],
     ['favourites', { customer: user._id }],
+    ['notifications', { user: user._id }],
     ['user', { _id: user._id }],
   ]);
   assert.equal(vendorLookup.mock.callCount(), 0);

@@ -4,6 +4,7 @@ const Vendor = require('../models/Vendor');
 const Listing = require('../models/Listing');
 const Cart = require('../models/Cart');
 const Favourite = require('../models/Favourite');
+const Notification = require('../models/Notification');
 const accountService = require('../services/accountService');
 const { removeQuietly } = require('./photoController');
 const listingPhotos = require('../services/listingPhotoService');
@@ -76,6 +77,7 @@ async function deleteMe(req, res) {
   }
   await Cart.deleteOne({ customer: user._id });
   await Favourite.deleteMany({ customer: user._id });
+  await Notification.deleteMany({ user: user._id });
   await User.deleteOne({ _id: user._id });
   if (user.photoId) await removeQuietly(user.photoId);
   for (const id of listingPhotoIds) await listingPhotos.removeQuietly(id);
