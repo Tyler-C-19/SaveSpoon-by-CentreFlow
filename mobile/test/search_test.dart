@@ -11,6 +11,7 @@ import 'package:savespoon/core/theme/app_theme.dart';
 import 'package:savespoon/features/auth/presentation/providers/auth_provider.dart';
 import 'package:savespoon/features/listings/data/listing_repository.dart';
 import 'package:savespoon/features/listings/data/recent_searches.dart';
+import 'package:savespoon/features/listings/data/saved_filters.dart';
 import 'package:savespoon/features/listings/presentation/pages/search_page.dart';
 import 'package:savespoon/features/listings/presentation/providers/listing_changes.dart';
 import 'package:savespoon/features/listings/presentation/widgets/category_picker.dart';
@@ -132,6 +133,7 @@ Future<GoRouter> _pump(
               ListingRepository(ApiClient(client: MockClient(server.handle))),
         ),
         ChangeNotifierProvider<ListingChanges>(create: (_) => ListingChanges()),
+        favouritesProvider(server.handle),
       ],
       child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
     ),
@@ -149,6 +151,8 @@ Future<void> _type(WidgetTester tester, String text) async {
 }
 
 void main() {
+  setUp(SessionSearchFilterStore.clear);
+
   testWidgets('the start screen shows categories, then recent searches', (
     tester,
   ) async {
@@ -202,7 +206,7 @@ void main() {
     expect(find.text('Recent Searches'), findsNothing);
   });
 
-  testWidgets('a category searches that word without saving it', (
+  testWidgets('a category tile filters by that category without saving it', (
     tester,
   ) async {
     final server = _Server(results: [_listing()]);
@@ -212,8 +216,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('category-Rice')));
     await tester.pumpAndSettle();
 
-    expect(server.searches.single.queryParameters['q'], 'Rice');
+    expect(server.searches.single.queryParameters, {
+      'category': 'Rice',
+      'page': '1',
+    });
     expect(find.byType(SearchResultRow), findsOneWidget);
+    expect(find.byKey(const ValueKey('active-filter-category-Rice')), findsOne);
+    expect(find.text('Newest'), findsOneWidget);
+    expect(_box, findsOneWidget);
     expect(store.saved, isEmpty);
   });
 
