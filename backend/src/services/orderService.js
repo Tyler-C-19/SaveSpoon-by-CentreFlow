@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Listing = require('../models/Listing');
 const Vendor = require('../models/Vendor');
 const Order = require('../models/Order');
+const notifications = require('./notificationService');
 
 const LISTING_GONE = 'LISTING_GONE';
 const SOLD_OUT = 'SOLD_OUT';
@@ -338,6 +339,7 @@ async function cancelOrder({ customer, orderId, reason, wholeCheckout = false, n
       else skipped.push(other);
     }
   }
+  notifications.inBackground(() => notifications.orderCancelled(cancelled));
   return { cancelled: cancelled.map(publicOrder), skipped: skipped.map(publicOrder) };
 }
 

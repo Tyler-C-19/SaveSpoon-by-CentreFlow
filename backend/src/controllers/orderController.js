@@ -1,4 +1,5 @@
 const orderService = require('../services/orderService');
+const notifications = require('../services/notificationService');
 const {
   isQuantity,
   isRequestId,
@@ -34,6 +35,7 @@ async function createOrder(req, res) {
     const { status, ...problem } = result.problem;
     return res.status(status).json(problem);
   }
+  if (!result.repeated) notifications.inBackground(() => notifications.orderPlaced([result.order]));
   return res
     .status(result.repeated ? 200 : 201)
     .json({ order: orderService.withCancelUntil(result.order) });
