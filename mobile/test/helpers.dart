@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
@@ -11,6 +12,8 @@ import 'package:savespoon/features/auth/data/token_storage.dart';
 import 'package:savespoon/features/auth/presentation/pages/splash_page.dart';
 import 'package:savespoon/features/listings/data/favourites_repository.dart';
 import 'package:savespoon/features/listings/presentation/providers/favourites_provider.dart';
+import 'package:savespoon/features/map/data/position_source.dart';
+import 'package:savespoon/features/seller_profile/domain/geo_point.dart';
 import 'package:savespoon/main.dart';
 
 class FakeTokenStorage implements TokenStorage {
@@ -51,6 +54,66 @@ class FakeGoogleAuth implements GoogleAuthService {
   Future<void> signOut() async => signOuts++;
 }
 
+// Stands in for the phone's location; nothing is allowed unless a test says so.
+class FakePositionSource implements PositionSource {
+  FakePositionSource({
+    this.access = LocationAccess.denied,
+    this.afterRequest,
+    this.position,
+    this.last,
+    this.approximate = false,
+  });
+
+  LocationAccess access;
+  // What the permission prompt changes [access] to.
+  LocationAccess? afterRequest;
+  GeoPoint? position;
+  // The phone's last known position, returned at once.
+  GeoPoint? last;
+  bool approximate;
+  // Positions the phone reports as it moves.
+  final StreamController<GeoPoint> moves = StreamController.broadcast();
+  int watchers = 0;
+  int requests = 0;
+  int fixes = 0;
+  int appSettingsOpened = 0;
+  int locationSettingsOpened = 0;
+
+  @override
+  Future<LocationAccess> check() async => access;
+
+  @override
+  Future<LocationAccess> request() async {
+    requests++;
+    access = afterRequest ?? access;
+    return access;
+  }
+
+  @override
+  Future<GeoPoint?> current() async {
+    fixes++;
+    return position;
+  }
+
+  @override
+  Future<GeoPoint?> lastKnown() async => last;
+
+  @override
+  Stream<GeoPoint> watch() {
+    watchers++;
+    return moves.stream;
+  }
+
+  @override
+  Future<bool> isApproximate() async => approximate;
+
+  @override
+  Future<void> openAppSettings() async => appSettingsOpened++;
+
+  @override
+  Future<void> openLocationSettings() async => locationSettingsOpened++;
+}
+
 const userJson = {
   '_id': 'u1',
   'name': 'Test Person',
@@ -67,6 +130,7 @@ Future<void> startApp(
   required MockClientHandler onRequest,
   GoogleAuthService? googleAuth,
   bool stubBrowse = true,
+  PositionSource? positionSource,
 }) async {
   tester.view.physicalSize = const Size(1200, 3000);
   tester.view.devicePixelRatio = 1;
@@ -102,6 +166,7 @@ Future<void> startApp(
         return onRequest(request);
       }),
       googleAuth: googleAuth ?? FakeGoogleAuth(),
+      positionSource: positionSource ?? FakePositionSource(),
     ),
   );
   await tester.pump();

@@ -3,6 +3,8 @@ import '../../profile/domain/photo_crop.dart';
 import '../../seller_profile/domain/vendor_info.dart';
 import '../domain/listing.dart';
 import '../domain/search_filters.dart';
+import '../../map/domain/map_stall.dart';
+import '../../seller_profile/domain/geo_point.dart';
 
 class AllergenSuggestion {
   const AllergenSuggestion({
@@ -87,16 +89,19 @@ class ListingRepository {
   }
 
   // The keyword can be left empty once a filter or sort is chosen.
+  // [near] is only sent for the Nearest sort.
   Future<SearchResults> search(
     String query, {
     int page = 1,
     SearchFilters filters = SearchFilters.none,
+    GeoPoint? near,
   }) async {
     final keyword = query.trim();
     final params = Uri(
       queryParameters: {
         if (keyword.isNotEmpty) 'q': keyword,
         ...filters.forKeyword(hasKeyword: keyword.isNotEmpty).toQuery(),
+        ..._nearQuery(near),
         'page': '$page',
       },
     ).query;
@@ -106,6 +111,36 @@ class ListingRepository {
       hasMore: data['hasMore'] as bool? ?? false,
       otherStalls: _parseListings({'listings': data['otherStalls']}),
     );
+  }
+
+  // Rounded to about 110 m before it leaves the phone.
+  Map<String, String> _nearQuery(GeoPoint? near) => near == null
+      ? const {}
+      : {
+          'lat': near.lat.toStringAsFixed(3),
+          'lng': near.lng.toStringAsFixed(3),
+        };
+
+  // Stalls with food on sale now, filtered like Search when [filters] or
+  // [query] are given.
+  Future<List<MapStall>> fetchMap({
+    String query = '',
+    SearchFilters filters = SearchFilters.none,
+  }) async {
+    final keyword = query.trim();
+    final params = Uri(
+      queryParameters: {
+        if (keyword.isNotEmpty) 'q': keyword,
+        ...filters.copyWith(sort: null).toQuery(),
+      },
+    ).query;
+    final data = await api.get(
+      params.isEmpty ? '/api/listings/map' : '/api/listings/map?$params',
+    );
+    return [
+      for (final item in data['stalls'] as List? ?? const [])
+        ?MapStall.fromJson(item as Map<String, dynamic>),
+    ];
   }
 
   Future<Listing> fetchDetails(String id) async {
@@ -118,33 +153,44 @@ class ListingRepository {
   final Map<String, (DateTime, VendorInfo)> _vendorInfo = {};
   final Map<String, Future<VendorInfo>> _vendorInfoLoading = {};
 
-  VendorInfo? cachedVendorInfo(String listingId) => _vendorInfo[listingId]?.$2;
+  // [all] includes the listing itself in the stall's items (from the map).
+  String _vendorInfoKey(String listingId, bool all) =>
+      all ? '$listingId?all' : listingId;
 
-  bool isVendorInfoFresh(String listingId) {
-    final saved = _vendorInfo[listingId];
+  VendorInfo? cachedVendorInfo(String listingId, {bool all = false}) =>
+      _vendorInfo[_vendorInfoKey(listingId, all)]?.$2;
+
+  bool isVendorInfoFresh(String listingId, {bool all = false}) {
+    final saved = _vendorInfo[_vendorInfoKey(listingId, all)];
     return saved != null &&
         DateTime.now().difference(saved.$1) < vendorInfoFresh;
   }
 
-  Future<VendorInfo> fetchVendorInfo(String listingId) =>
-      _vendorInfoLoading[listingId] ??= _loadVendorInfo(listingId);
+  Future<VendorInfo> fetchVendorInfo(String listingId, {bool all = false}) =>
+      _vendorInfoLoading[_vendorInfoKey(listingId, all)] ??= _loadVendorInfo(
+        listingId,
+        all,
+      );
 
-  Future<VendorInfo> _loadVendorInfo(String listingId) async {
+  Future<VendorInfo> _loadVendorInfo(String listingId, bool all) async {
+    final key = _vendorInfoKey(listingId, all);
     try {
-      final data = await api.get('/api/listings/$listingId/vendor');
+      final data = await api.get(
+        '/api/listings/$listingId/vendor${all ? '?all=1' : ''}',
+      );
       final info = VendorInfo.fromJson(data);
-      _vendorInfo[listingId] = (DateTime.now(), info);
+      _vendorInfo[key] = (DateTime.now(), info);
       return info;
     } finally {
-      _vendorInfoLoading.remove(listingId);
+      _vendorInfoLoading.remove(key);
     }
   }
 
   // Starts loading early, for example when a card is touched; the pane shows
   // any error itself.
-  void prefetchVendorInfo(String listingId) {
-    if (isVendorInfoFresh(listingId)) return;
-    fetchVendorInfo(listingId).ignore();
+  void prefetchVendorInfo(String listingId, {bool all = false}) {
+    if (isVendorInfoFresh(listingId, all: all)) return;
+    fetchVendorInfo(listingId, all: all).ignore();
   }
 
   Future<Listing> create({
