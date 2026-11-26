@@ -23,6 +23,8 @@ Map<String, dynamic> _json({
   String id = 'l1',
   String title = 'Nasi Lemak',
   int stock = 5,
+  DateTime? start,
+  DateTime? end,
 }) => {
   '_id': id,
   'title': title,
@@ -33,8 +35,8 @@ Map<String, dynamic> _json({
   'discountedPrice': 4.5,
   'quantityAvailable': stock,
   'soldCount': 3,
-  'pickupStart': _start.toUtc().toIso8601String(),
-  'pickupEnd': _end.toUtc().toIso8601String(),
+  'pickupStart': (start ?? _start).toUtc().toIso8601String(),
+  'pickupEnd': (end ?? _end).toUtc().toIso8601String(),
   'allergens': ['egg'],
   'otherAllergens': <String>[],
   'status': 'active',
@@ -43,6 +45,8 @@ Map<String, dynamic> _json({
 class _Server {
   int activeOrders = 0;
   int stock = 5;
+  DateTime? start;
+  DateTime? end;
   final List<Map<String, dynamic>> patches = [];
   http.Response? Function(Map<String, dynamic> body)? onPatch;
 
@@ -50,7 +54,7 @@ class _Server {
     final path = request.url.path;
     if (request.method == 'GET' && path == '/api/listings/mine/l1') {
       return jsonResponse({
-        'listing': _json(stock: stock),
+        'listing': _json(stock: stock, start: start, end: end),
         'pastSold': 0,
         'activeOrderCount': activeOrders,
       });
@@ -78,12 +82,16 @@ class _Opened {
   final List<String> timePicks = [];
 }
 
-Future<_Opened> _pump(WidgetTester tester, _Server server) async {
+Future<_Opened> _pump(
+  WidgetTester tester,
+  _Server server, {
+  DateTime? now,
+}) async {
   tester.view.physicalSize = const Size(1200, 3400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final opened = _Opened();
-  final listing = Listing.fromJson(_json());
+  final listing = Listing.fromJson(_json(start: server.start, end: server.end));
   final router = GoRouter(
     routes: [
       GoRoute(
@@ -100,7 +108,7 @@ Future<_Opened> _pump(WidgetTester tester, _Server server) async {
         path: '/edit',
         builder: (context, state) => AddListingPage(
           editing: listing,
-          now: () => _now,
+          now: () => now ?? _now,
           timePicker: (context, initial) async {
             opened.timePicks.add('$initial');
             return const TimeOfDay(hour: 15, minute: 0);
@@ -185,6 +193,37 @@ void main() {
     expect((opened.results.single as Listing?)?.title, 'Nasi Lemak Ayam');
   });
 
+  for (final late in [
+    DateTime(_today.year, _today.month, _today.day, 22),
+    DateTime(_today.year, _today.month, _today.day + 1, 0, 10),
+  ]) {
+    testWidgets(
+      'a locked pickup that runs past midnight still saves at ${late.hour}',
+      (tester) async {
+        final start = DateTime(_today.year, _today.month, _today.day, 18, 51);
+        final end = start.add(const Duration(hours: 7));
+        final server = _Server()
+          ..activeOrders = 2
+          ..start = start
+          ..end = end;
+        await _pump(tester, server, now: late);
+
+        await tester.enterText(
+          find.bySemanticsLabel('Item name'),
+          'Bubur Cha Cha Cha',
+        );
+        await tester.pump();
+        await _tapSave(tester);
+
+        expect(find.text('Pickup must end after it starts.'), findsNothing);
+        final body = server.patches.single;
+        expect(body['title'], 'Bubur Cha Cha Cha');
+        expect(body['pickupStart'], start.toUtc().toIso8601String());
+        expect(body['pickupEnd'], end.toUtc().toIso8601String());
+      },
+    );
+  }
+
   testWidgets('an order during the edit asks before setting stock anyway', (
     tester,
   ) async {
@@ -253,7 +292,7 @@ void main() {
     await tester.tap(find.text('No'));
     await tester.pump();
     expect(
-      find.text("Customers who already ordered aren't told about this change."),
+      find.text('Customers who ordered will be notified about this change.'),
       findsOneWidget,
     );
   });

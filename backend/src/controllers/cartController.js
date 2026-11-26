@@ -2,6 +2,7 @@ const Cart = require('../models/Cart');
 const Order = require('../models/Order');
 const Listing = require('../models/Listing');
 const orderService = require('../services/orderService');
+const notifications = require('../services/notificationService');
 const { viewCart, findOrCreateCart } = require('../services/cartService');
 const { PLACE_FAILED } = require('./orderController');
 const {
@@ -201,6 +202,7 @@ async function checkout(req, res) {
   } catch (err) {
     console.error('Emptying the cart failed:', err.message);
   }
+  notifications.inBackground(() => notifications.orderPlaced(orders));
   return res.status(201).json({ orders: orders.map((order) => orderService.withCancelUntil(order)) });
 }
 

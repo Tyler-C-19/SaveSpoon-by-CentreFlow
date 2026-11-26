@@ -9,6 +9,8 @@ import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/load_error.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../notifications/data/notification_repository.dart';
+import '../../../notifications/presentation/widgets/notification_settings_section.dart';
 import '../../data/profile_repository.dart';
 import '../../domain/user_profile.dart';
 import '../widgets/delete_account_flow.dart';
@@ -27,11 +29,18 @@ class _ProfilePageState extends State<ProfilePage> {
   UserProfile? _profile;
   String? _error;
   String? _banner;
+  int _reloads = 0;
 
   @override
   void dispose() {
     _scroll.dispose();
     super.dispose();
+  }
+
+  // Try Again and pull to refresh also reload the Notifications section.
+  Future<void> _reload() {
+    setState(() => _reloads++);
+    return _load();
   }
 
   @override
@@ -153,7 +162,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Stack(
       children: [
         RefreshIndicator(
-          onRefresh: _load,
+          onRefresh: _reload,
           child: ListView(
             controller: _scroll,
             padding: EdgeInsets.fromLTRB(
@@ -195,7 +204,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 LoadError(
                   title: "Couldn't load your latest details",
                   message: _error!,
-                  onRetry: _load,
+                  onRetry: _reload,
                 ),
                 gap,
               ],
@@ -283,6 +292,14 @@ class _ProfilePageState extends State<ProfilePage> {
                           : profile.vendor!.description,
                     ),
                   ],
+                ),
+              ],
+              if (context.read<NotificationRepository?>() != null) ...[
+                gap,
+                NotificationSettingsSection(
+                  role: role,
+                  onEdit: _open,
+                  reloads: _reloads,
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),

@@ -20,6 +20,7 @@ const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
 const { countActiveOrders } = require('../services/accountService');
+const notifications = require('../services/notificationService');
 const listingPhotos = require('../services/listingPhotoService');
 
 const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
@@ -434,7 +435,7 @@ async function updateStock(req, res) {
   const invalid = stockChangeError(req.body);
   if (invalid) return res.status(400).json({ error: invalid });
 
-  const { listing } = (await findOwnListing(req, res)) ?? {};
+  const { listing, vendor } = (await findOwnListing(req, res)) ?? {};
   if (!listing) return undefined;
 
   const { quantity, expectedQuantity } = req.body;
@@ -450,7 +451,12 @@ async function updateStock(req, res) {
     { $set: { quantityAvailable: quantity } },
     { returnDocument: 'after' }
   );
-  if (updated) return res.json({ listing: updated });
+  if (updated) {
+    if (listing.quantityAvailable <= 0) {
+      notifications.inBackground(() => notifications.favouriteBack(updated, vendor, 'back_in_stock'));
+    }
+    return res.json({ listing: updated });
+  }
 
   const current = await Listing.findById(listing._id);
   if (!current) return res.status(404).json(LISTING_NOT_FOUND);
@@ -464,7 +470,7 @@ async function updateAvailability(req, res) {
   const invalid = availabilityError(req.body);
   if (invalid) return res.status(400).json({ error: invalid });
 
-  const { listing } = (await findOwnListing(req, res)) ?? {};
+  const { listing, vendor } = (await findOwnListing(req, res)) ?? {};
   if (!listing) return undefined;
 
   const updated = await Listing.findOneAndUpdate(
@@ -473,6 +479,9 @@ async function updateAvailability(req, res) {
     { returnDocument: 'after' }
   );
   if (!updated) return res.status(409).json(PICKUP_OVER);
+  if (listing.status === 'paused' && updated.status === 'active') {
+    notifications.inBackground(() => notifications.favouriteBack(updated, vendor, 'relisted'));
+  }
   return res.json({ listing: updated });
 }
 
@@ -547,6 +556,7 @@ async function relist(req, res) {
   }
 
   const relisted = await Listing.findById(listing._id);
+  if (relisted) notifications.inBackground(() => notifications.favouriteBack(relisted, vendor, 'relisted'));
   return res.json({ listing: relisted, pastSold: await pastSoldFor(listing._id) });
 }
 
@@ -609,7 +619,13 @@ async function updateListing(req, res) {
   }
 
   const updated = await Listing.findOneAndUpdate(filter, update, { returnDocument: 'after' });
-  if (updated) return res.json({ listing: updated });
+  if (updated) {
+    notifications.inBackground(() => notifications.itemChanged(listing, updated, vendor));
+    if (listing.quantityAvailable <= 0 && updated.quantityAvailable > 0) {
+      notifications.inBackground(() => notifications.favouriteBack(updated, vendor, 'back_in_stock'));
+    }
+    return res.json({ listing: updated });
+  }
 
   const current = await Listing.findById(listing._id);
   if (!current) return res.status(404).json(LISTING_NOT_FOUND);

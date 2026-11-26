@@ -20,6 +20,9 @@ class AuthProvider extends ChangeNotifier {
 
   late GoogleAuthService _google;
 
+  // Runs before logging out, while the session still works.
+  Future<void> Function()? beforeLogout;
+
   void attach(AuthRepository repository, GoogleAuthService google) {
     _repository = repository;
     _google = google;
@@ -89,6 +92,11 @@ class AuthProvider extends ChangeNotifier {
   Future<void> replaceToken(String token) => repository.replaceToken(token);
 
   Future<void> logout() async {
+    try {
+      await beforeLogout?.call();
+    } catch (e) {
+      debugPrint('Before logout failed: $e');
+    }
     await _clearAndSignOut();
     try {
       await _google.signOut();

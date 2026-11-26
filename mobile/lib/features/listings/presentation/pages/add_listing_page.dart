@@ -303,6 +303,17 @@ class _AddListingPageState extends State<AddListingPage> {
 
   String? get _pickupError {
     final now = widget.now();
+    // An untouched window keeps its own dates, as it may end after midnight.
+    final editing = widget.editing;
+    if (editing != null &&
+        _start == TimeOfDay.fromDateTime(editing.pickupStart) &&
+        _end == TimeOfDay.fromDateTime(editing.pickupEnd)) {
+      return ListingValidators.pickup(
+        editing.pickupStart,
+        editing.pickupEnd,
+        now,
+      );
+    }
     return ListingValidators.pickup(
       _onDay(now, _start),
       _onDay(now, _end),
@@ -622,7 +633,7 @@ class _AddListingPageState extends State<AddListingPage> {
     }
   }
 
-  // An amber note for changes that customers who already ordered won't hear about.
+  // An amber note for changes that customers who already ordered are told about.
   Widget _orderedNote() => Padding(
     key: const ValueKey('ordered-note'),
     padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -633,7 +644,7 @@ class _AddListingPageState extends State<AddListingPage> {
         const SizedBox(width: AppSpacing.xs),
         Expanded(
           child: Text(
-            "Customers who already ordered aren't told about this change.",
+            'Customers who ordered will be notified about this change.',
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: AppColors.onWarning),
           ),

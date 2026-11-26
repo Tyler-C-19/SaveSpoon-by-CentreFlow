@@ -2,8 +2,10 @@ const mongoose = require('mongoose');
 
 const SECRET_FIELDS = [
   'passwordHash', 'otpHash', 'otpPurpose', 'otpExpiresAt', 'otpAttempts', 'pendingEmail', 'passwordChangedAt', 'photoId',
-  'passwordAttempts', 'passwordLockedUntil', 'photoWidth', 'photoHeight',
+  'passwordAttempts', 'passwordLockedUntil', 'photoWidth', 'photoHeight', 'deviceTokens',
 ];
+
+const MAX_DEVICES = 5;
 
 const userSchema = new mongoose.Schema(
   {
@@ -37,6 +39,15 @@ const userSchema = new mongoose.Schema(
       width: { type: Number },
       height: { type: Number },
     },
+    // Push notification tokens of the phones this account is logged in on.
+    deviceTokens: { type: [String], default: undefined, select: false },
+    notificationPrefs: {
+      orderAlerts: { type: Boolean, default: true },
+      stockAlerts: { type: Boolean, default: true },
+      itemChanges: { type: Boolean, default: true },
+      pickupReminders: { type: Boolean, default: true },
+      favourites: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: true,
@@ -50,3 +61,4 @@ const userSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.MAX_DEVICES = MAX_DEVICES;

@@ -11,6 +11,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Push notifications need the Firebase file, which is kept out of git. Without it the app
+// still builds, just without notifications.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.centreflow.savespoon"
     compileSdk = flutter.compileSdkVersion
@@ -19,6 +25,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -54,4 +61,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Needed by flutter_local_notifications for scheduled reminders.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
