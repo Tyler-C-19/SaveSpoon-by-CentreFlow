@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
+import '../../../map/presentation/widgets/distance_pill.dart';
 import 'favourite_button.dart';
 import 'icon_scale.dart';
 import 'listing_card.dart';
@@ -222,6 +223,7 @@ class _Thumbnail extends StatelessWidget {
                   ),
                 ),
               ),
+            PhotoDistance(pin: listing.pickupLocation),
           ],
         ),
       ),

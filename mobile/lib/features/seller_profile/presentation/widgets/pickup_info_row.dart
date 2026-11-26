@@ -15,6 +15,7 @@ class PickupInfoRow extends StatelessWidget {
     this.actionIcon,
     this.onAction,
     this.actionKey,
+    this.note,
   });
 
   final IconData icon;
@@ -24,6 +25,8 @@ class PickupInfoRow extends StatelessWidget {
   final IconData? actionIcon;
   final VoidCallback? onAction;
   final Key? actionKey;
+  // An extra line under the value, such as how far away it is.
+  final Widget? note;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +64,7 @@ class PickupInfoRow extends StatelessWidget {
                           onTap: onAction,
                         ),
                 ),
+                ?note,
               ],
             ),
           ),
