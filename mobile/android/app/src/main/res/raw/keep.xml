@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds remove resources that look unused. The notification icon is
+     looked up by name at run time, so it is kept here or notifications break. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_savespoon" />
