@@ -11,6 +11,7 @@ import '../../../listings/presentation/widgets/food_thumbnail.dart';
 import '../../../listings/presentation/widgets/listing_card.dart';
 import '../../data/order_repository.dart';
 import '../../domain/order.dart';
+import '../../../notifications/presentation/providers/notifications_controller.dart';
 import '../widgets/cancel_order_dialog.dart';
 import '../widgets/order_card.dart'
     show OrderNote, cancelUntilLabel, payAtPickupLabel;
@@ -53,6 +54,19 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
   );
 
   bool _cancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener(_scheduleReminders);
+  }
+
+  // Schedules the new order's pickup reminders once the tick has finished.
+  void _scheduleReminders(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    _controller.removeStatusListener(_scheduleReminders);
+    context.read<NotificationsController?>()?.syncReminders();
+  }
 
   @override
   void dispose() {

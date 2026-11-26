@@ -24,6 +24,8 @@ import '../../features/listings/presentation/pages/search_page.dart';
 import '../../features/listings/presentation/pages/vendor_listing_page.dart';
 import '../../features/listings/presentation/pages/vendor_listings_page.dart';
 import '../../features/listings/presentation/providers/listing_changes.dart';
+import '../../features/notifications/presentation/pages/notification_settings_page.dart';
+import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/orders/domain/order.dart';
 import '../../features/orders/presentation/pages/order_confirmation_page.dart';
 import '../../features/orders/presentation/pages/order_details_page.dart';
@@ -63,6 +65,11 @@ abstract final class AppRoutes {
   static const String vendorOrders = '/vendor/orders';
   static const String vendorProfile = '/vendor/profile';
   static const String vendorBusinessEdit = '/vendor/profile/business';
+
+  static String notificationsFor(String role) => '/$role/notifications';
+
+  static String profileNotificationsFor(String role) =>
+      '/$role/profile/notifications';
 
   static String profileEditFor(String role) => '/$role/profile/edit';
   static String profilePasswordFor(String role) => '/$role/profile/password';
@@ -274,6 +281,18 @@ GoRouter createAppRouter(AuthProvider auth) => GoRouter(
         path: AppRoutes.profilePasswordFor(role),
         pageBuilder: (context, state) =>
             _slideInPage<String>(state, const ChangePasswordPage()),
+      ),
+    ],
+    for (final role in ['customer', 'vendor']) ...[
+      GoRoute(
+        path: AppRoutes.notificationsFor(role),
+        pageBuilder: (context, state) =>
+            _slideInPage<void>(state, NotificationsPage(role: role)),
+      ),
+      GoRoute(
+        path: AppRoutes.profileNotificationsFor(role),
+        pageBuilder: (context, state) =>
+            _slideInPage<String>(state, NotificationSettingsPage(role: role)),
       ),
     ],
     GoRoute(

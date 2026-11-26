@@ -6,6 +6,8 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/brand_title.dart';
 import '../../../cart/presentation/providers/cart_provider.dart';
 import '../../../cart/presentation/widgets/cart_tab_icon.dart';
+import '../../../notifications/presentation/widgets/notification_bell.dart';
+import '../../../notifications/presentation/widgets/notification_link_opener.dart';
 
 class RoleTab {
   const RoleTab(this.label, this.icon, {this.isCart = false});
@@ -36,6 +38,8 @@ class RoleShell extends StatelessWidget {
   final StatefulNavigationShell shell;
   final List<RoleTab> tabs;
 
+  String get role => identical(tabs, vendorTabs) ? 'vendor' : 'customer';
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -46,8 +50,9 @@ class RoleShell extends StatelessWidget {
         automaticallyImplyLeading: false,
         centerTitle: false,
         title: const BrandTitle(),
+        actions: [NotificationBell(role: role)],
       ),
-      body: shell,
+      body: NotificationLinkOpener(role: role, child: shell),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
