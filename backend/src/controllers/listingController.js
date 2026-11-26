@@ -15,12 +15,13 @@ const {
 } = require('../validators/listingValidators');
 const SalesRecord = require('../models/SalesRecord');
 const Favourite = require('../models/Favourite');
-const { parseFilters, filterMatch } = require('../validators/searchFilters');
+const { parseFilters, filterMatch, withDistance } = require('../validators/searchFilters');
 const { createUsageLimiter } = require('../services/usageLimiter');
 const { normaliseAllergens, LOW_STOCK_LIMIT } = require('../models/listingOptions');
 const { NO_PROFILE } = require('./vendorController');
 const { countActiveOrders } = require('../services/accountService');
 const listingPhotos = require('../services/listingPhotoService');
+const { groupByStall } = require('../services/stallMapService');
 
 const suggestionLimiter = createUsageLimiter({ limit: 10, windowMs: 60 * 60 * 1000 });
 
@@ -32,6 +33,8 @@ const FAVOURITES_STRIP_SIZE = 6;
 const TOP_RESULTS = 3;
 const SEARCH_MAX_LENGTH = 50;
 const PAGE_PATTERN = /^[1-9]\d{0,4}$/;
+// More than any campus has on sale at once.
+const MAP_LISTING_LIMIT = 500;
 
 // Points per search word, by where it is found.
 const SEARCH_POINTS = { titleWordStart: 10, titleInside: 6, stall: 4, address: 4, category: 3, description: 1, titleStartsWithSearch: 20 };
@@ -66,6 +69,7 @@ const publicFields = {
     status: 1,
     createdAt: 1,
     stallName: '$vendorProfile.stallName',
+    location: '$location.coordinates',
   },
 };
 
@@ -94,6 +98,7 @@ const SORT_ORDERS = {
   ending: { pickupEnd: 1, ...NEWEST_FIRST },
   sold: { soldCount: -1, ...NEWEST_FIRST },
   saving: { _saving: -1, ...NEWEST_FIRST },
+  nearest: { _distance: 1, ...NEWEST_FIRST },
 };
 
 function availablePipeline({ now, stock, sort, skip = 0, limit }) {
@@ -221,6 +226,7 @@ async function search(req, res) {
     ...(words ? searchStages(now, words, match) : [{ $match: { ...availableMatch(now).$match, ...match } }, ...withStall]),
     withListedAt,
     ...(sort === 'saving' ? [withSaving] : []),
+    ...(sort === 'nearest' ? [withDistance(filters.near)] : []),
     { $sort: SORT_ORDERS[sort] },
     { $skip: (Number(page) - 1) * PAGE_SIZE },
     { $limit: PAGE_SIZE + 1 },
@@ -233,6 +239,35 @@ async function search(req, res) {
     body.otherStalls = plain ? await otherStalls(now, words, listings) : [];
   }
   return res.json(body);
+}
+
+// Stalls with food on sale now, one per map marker. Takes the same keyword and filters as search.
+async function getMap(req, res) {
+  const { q } = req.query;
+  const filters = parseFilters(req.query);
+  if (filters.error) return res.status(400).json({ error: filters.error });
+  const hasKeyword = q !== undefined;
+  if (hasKeyword) {
+    const length = typeof q === 'string' ? q.trim().replace(/\s+/g, ' ').length : 0;
+    if (length < 1 || length > SEARCH_MAX_LENGTH) {
+      return res.status(400).json({ error: `Enter 1 to ${SEARCH_MAX_LENGTH} characters to search.` });
+    }
+  }
+
+  const now = new Date();
+  const match = filterMatch(filters, now);
+  if (filters.favourites) {
+    match._id = { $in: await Favourite.distinct('listing', { customer: req.user._id }) };
+  }
+  const words = hasKeyword ? searchWords(q) : null;
+  const found = await Listing.aggregate([
+    ...(words ? searchStages(now, words, match) : [{ $match: { ...availableMatch(now).$match, ...match } }, ...withStall]),
+    withListedAt,
+    { $sort: NEWEST_FIRST },
+    { $limit: MAP_LISTING_LIMIT },
+    { $project: { ...searchFields.$project, _stall: '$vendor' } },
+  ]);
+  return res.json({ stalls: groupByStall(found) });
 }
 
 // The customer's Favourites that are on sale now, most recently added first.
@@ -312,11 +347,16 @@ async function getVendorInfo(req, res) {
     return res.status(status).json(problem);
   }
 
+  // From the map there is no current item, so the stall's items include this one.
+  const { all } = req.query;
+  if (all !== undefined && all !== '1') return res.status(400).json({ error: 'All must be 1.' });
+  const others = all === '1' ? {} : { _id: { $ne: listing._id } };
+
   const [owner, otherListings] = await Promise.all([
     User.findById(vendor.user, 'photoUrl'),
     Listing.aggregate([
       availableMatch(new Date()),
-      { $match: { vendor: vendor._id, _id: { $ne: listing._id } } },
+      { $match: { vendor: vendor._id, ...others } },
       withListedAt,
       { $sort: { soldCount: -1, ...NEWEST_FIRST } },
       { $limit: OTHER_LISTINGS_SIZE },
@@ -694,6 +734,7 @@ module.exports = {
   getRunningOut,
   getFavourites,
   search,
+  getMap,
   getDetails,
   getVendorInfo,
   getMine,

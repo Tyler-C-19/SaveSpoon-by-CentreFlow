@@ -86,7 +86,8 @@ for (const url of ['/api/listings', '/api/listings/running-out']) {
 
     const fields = stage(aggregate.mock.calls[0].arguments[0], '$project');
     assert.equal(fields.stallName, '$vendorProfile.stallName');
-    for (const hidden of ['vendor', 'vendorProfile', 'location', 'user', 'phone']) {
+    assert.equal(fields.location, '$location.coordinates');
+    for (const hidden of ['vendor', 'vendorProfile', 'user', 'phone']) {
       assert.equal(fields[hidden], undefined, hidden);
     }
   });

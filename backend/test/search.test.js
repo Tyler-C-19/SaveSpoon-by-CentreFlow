@@ -157,7 +157,8 @@ test('search returns the stall name but no private vendor details', async () => 
   const fields = stage(pipeline, '$project');
   assert.equal(fields.stallName, '$vendorProfile.stallName');
   assert.equal(fields.pickupAddress, '$vendorProfile.address');
-  for (const hidden of ['vendor', 'vendorProfile', 'location', 'user', 'phone', '_score']) {
+  assert.equal(fields.location, '$location.coordinates');
+  for (const hidden of ['vendor', 'vendorProfile', 'user', 'phone', '_score']) {
     assert.equal(fields[hidden], undefined, hidden);
   }
 });
