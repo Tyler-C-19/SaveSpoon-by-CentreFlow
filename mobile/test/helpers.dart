@@ -4,9 +4,13 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:provider/provider.dart';
+import 'package:savespoon/core/network/api_client.dart';
 import 'package:savespoon/features/auth/data/google_auth_service.dart';
 import 'package:savespoon/features/auth/data/token_storage.dart';
 import 'package:savespoon/features/auth/presentation/pages/splash_page.dart';
+import 'package:savespoon/features/listings/data/favourites_repository.dart';
+import 'package:savespoon/features/listings/presentation/providers/favourites_provider.dart';
 import 'package:savespoon/main.dart';
 
 class FakeTokenStorage implements TokenStorage {
@@ -83,6 +87,12 @@ Future<void> startApp(
           if (browsePaths.contains(request.url.path)) {
             return jsonResponse({'listings': []});
           }
+          if (request.url.path == '/api/listings/favourites') {
+            return jsonResponse({'listings': []});
+          }
+          if (request.url.path == '/api/favourites/ids') {
+            return jsonResponse({'listingIds': []});
+          }
           if (request.url.path == '/api/cart') {
             return jsonResponse({
               'cart': {'items': [], 'total': 0, 'warnings': []},
@@ -98,3 +108,25 @@ Future<void> startApp(
   await tester.pump(SplashPage.displayTime);
   await tester.pumpAndSettle();
 }
+
+// The Favourites provider for tests that build a page on its own.
+ChangeNotifierProvider<FavouritesProvider> favouritesProvider(
+  MockClientHandler onRequest,
+) => ChangeNotifierProvider<FavouritesProvider>(
+  create: (_) => FavouritesProvider(
+    FavouritesRepository(ApiClient(client: MockClient(onRequest))),
+  ),
+);
+
+// Answers the Favourites requests with none, and passes everything else on.
+MockClientHandler withNoFavourites(MockClientHandler onRequest) =>
+    (request) async {
+      final path = request.url.path;
+      if (path == '/api/listings/favourites') {
+        return jsonResponse({'listings': []});
+      }
+      if (path == '/api/favourites/ids') {
+        return jsonResponse({'listingIds': []});
+      }
+      return onRequest(request);
+    };

@@ -171,6 +171,7 @@ Widget _app(
   providers: [
     Provider<ListingRepository>.value(value: repository),
     Provider<OrderRepository>(create: (_) => OrderRepository(api)),
+    favouritesProvider((_) async => jsonResponse({'listingIds': []})),
   ],
   child: MaterialApp(
     theme: AppTheme.light,

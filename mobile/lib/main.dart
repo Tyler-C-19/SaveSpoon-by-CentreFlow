@@ -13,7 +13,9 @@ import 'features/auth/data/token_storage.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/cart/data/cart_repository.dart';
 import 'features/cart/presentation/providers/cart_provider.dart';
+import 'features/listings/data/favourites_repository.dart';
 import 'features/listings/data/listing_repository.dart';
+import 'features/listings/presentation/providers/favourites_provider.dart';
 import 'features/listings/presentation/providers/listing_changes.dart';
 import 'features/orders/data/order_repository.dart';
 import 'features/profile/data/profile_repository.dart';
@@ -93,6 +95,9 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
         Provider<ProfileRepository>(create: (_) => ProfileRepository(_api)),
         ChangeNotifierProvider<CartProvider>.value(value: _cart),
         ChangeNotifierProvider<ListingChanges>.value(value: _listingChanges),
+        ChangeNotifierProvider<FavouritesProvider>(
+          create: (_) => FavouritesProvider(FavouritesRepository(_api)),
+        ),
       ],
       child: MaterialApp.router(
         title: 'SaveSpoon',

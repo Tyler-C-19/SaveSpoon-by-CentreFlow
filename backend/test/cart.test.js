@@ -146,6 +146,20 @@ test('adding the same item merges quantities up to the stock left', async () => 
   assert.equal(res.body.message, 'Only 5 Nasi Lemak left, so your cart now has 5.');
 });
 
+test('adding when the cart already has every one left says so', async () => {
+  const customer = makeUser('customer');
+  const token = signedInAs(customer);
+  const vendor = vendorDoc();
+  const listing = listingDoc(vendor);
+  const cart = cartDoc(customer, [{ listing, quantity: 5 }]);
+  setUp({ cart, listings: [listing], vendors: [vendor] });
+
+  const res = await call('POST', '/api/cart/items', token, { listingId: String(listing._id), quantity: 1 });
+
+  assert.equal(cart.items[0].quantity, 5);
+  assert.equal(res.body.message, 'Your cart already has all 5 Nasi Lemak left.');
+});
+
 test('adding stops at 20 different items', async () => {
   const customer = makeUser('customer');
   const token = signedInAs(customer);

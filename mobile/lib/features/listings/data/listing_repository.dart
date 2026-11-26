@@ -2,6 +2,7 @@ import '../../../core/network/api_client.dart';
 import '../../profile/domain/photo_crop.dart';
 import '../../seller_profile/domain/vendor_info.dart';
 import '../domain/listing.dart';
+import '../domain/search_filters.dart';
 
 class AllergenSuggestion {
   const AllergenSuggestion({
@@ -77,9 +78,29 @@ class ListingRepository {
   Future<List<Listing>> fetchRunningOut() async =>
       _parseListings(await api.get('/api/listings/running-out'));
 
-  Future<SearchResults> search(String query, {int page = 1}) async {
-    final keyword = Uri.encodeQueryComponent(query);
-    final data = await api.get('/api/listings/search?q=$keyword&page=$page');
+  Future<ListingPage> fetchFavourites() async {
+    final data = await api.get('/api/listings/favourites');
+    return ListingPage(
+      listings: _parseListings(data),
+      hasMore: data['hasMore'] as bool? ?? false,
+    );
+  }
+
+  // The keyword can be left empty once a filter or sort is chosen.
+  Future<SearchResults> search(
+    String query, {
+    int page = 1,
+    SearchFilters filters = SearchFilters.none,
+  }) async {
+    final keyword = query.trim();
+    final params = Uri(
+      queryParameters: {
+        if (keyword.isNotEmpty) 'q': keyword,
+        ...filters.forKeyword(hasKeyword: keyword.isNotEmpty).toQuery(),
+        'page': '$page',
+      },
+    ).query;
+    final data = await api.get('/api/listings/search?$params');
     return SearchResults(
       listings: _parseListings(data),
       hasMore: data['hasMore'] as bool? ?? false,
