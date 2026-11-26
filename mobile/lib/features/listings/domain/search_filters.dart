@@ -7,7 +7,8 @@ enum SearchSort {
   priceHighToLow('price_desc', 'Price: High to Low'),
   endingSoon('ending', 'Ending Soon'),
   mostSold('sold', 'Most Sold'),
-  biggestSaving('saving', 'Biggest Saving');
+  biggestSaving('saving', 'Biggest Saving'),
+  nearest('nearest', 'Nearest');
 
   const SearchSort(this.value, this.label);
 

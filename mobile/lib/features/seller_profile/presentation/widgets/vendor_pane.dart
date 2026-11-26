@@ -12,6 +12,7 @@ import '../../../listings/presentation/widgets/listing_card.dart';
 import '../../../profile/presentation/widgets/profile_avatar.dart';
 import '../../domain/vendor_info.dart';
 import 'pickup_info_row.dart';
+import '../../../map/presentation/widgets/distance_pill.dart';
 
 const String vendorGone = 'This stall is no longer available.';
 const String vendorLoadFailed = "Unable to load this stall's information.";
@@ -22,10 +23,14 @@ typedef OpenListing = Future<void> Function(Listing listing);
 // Opens the stall's details as a sheet above the page and the tab bar. What
 // [listing] already knows shows at once; the rest fills in when it arrives.
 // Another listing opens on top of the sheet, so Back returns to it.
+// [allItems] lists [listing] among the stall's items too (from the map), with
+// [first] (what matched the map's search) ahead of the rest.
 Future<void> showVendorPane(
   BuildContext context, {
   required Listing listing,
   OpenListing? onOpenListing,
+  bool allItems = false,
+  List<Listing> first = const [],
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -36,6 +41,8 @@ Future<void> showVendorPane(
     builder: (sheetContext) => VendorPane(
       listing: listing,
       onOpenListing: onOpenListing ?? (other) => _openDetails(context, other),
+      allItems: allItems,
+      first: first,
     ),
   );
 }
@@ -55,10 +62,14 @@ class VendorPane extends StatefulWidget {
     super.key,
     required this.listing,
     required this.onOpenListing,
+    this.allItems = false,
+    this.first = const [],
   });
 
   final Listing listing;
   final OpenListing onOpenListing;
+  final bool allItems;
+  final List<Listing> first;
 
   @override
   State<VendorPane> createState() => _VendorPaneState();
@@ -78,8 +89,8 @@ class _VendorPaneState extends State<VendorPane> {
   void initState() {
     super.initState();
     _repository = context.read<ListingRepository>();
-    _info = _repository.cachedVendorInfo(_listingId);
-    if (!_repository.isVendorInfoFresh(_listingId)) {
+    _info = _repository.cachedVendorInfo(_listingId, all: widget.allItems);
+    if (!_repository.isVendorInfoFresh(_listingId, all: widget.allItems)) {
       _loading = true;
       _fetch();
     }
@@ -95,7 +106,10 @@ class _VendorPaneState extends State<VendorPane> {
 
   Future<void> _fetch() async {
     try {
-      final info = await _repository.fetchVendorInfo(_listingId);
+      final info = await _repository.fetchVendorInfo(
+        _listingId,
+        all: widget.allItems,
+      );
       if (mounted) setState(() => _info = info);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -110,6 +124,19 @@ class _VendorPaneState extends State<VendorPane> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  static const int _stripSize = 4;
+
+  // Search matches first, then the stall's other items, still up to 4.
+  List<Listing> _firstItems(List<Listing> items) {
+    if (widget.first.isEmpty) return items;
+    final firstIds = {for (final item in widget.first) item.id};
+    return [
+      ...widget.first,
+      for (final item in items)
+        if (!firstIds.contains(item.id)) item,
+    ].take(_stripSize).toList();
   }
 
   Future<void> _openLink(Future<bool> Function() open, String failed) async {
@@ -160,7 +187,7 @@ class _VendorPaneState extends State<VendorPane> {
     final location = info?.location ?? listing.pickupLocation;
     final placeId = info?.placeId ?? listing.pickupPlaceId;
     final description = info?.description;
-    final others = info?.otherListings ?? const <Listing>[];
+    final others = _firstItems(info?.otherListings ?? const <Listing>[]);
     final error = _error;
     final linkError = _linkError;
 
@@ -170,6 +197,7 @@ class _VendorPaneState extends State<VendorPane> {
           icon: Icons.location_on_outlined,
           label: 'Pickup address',
           value: address,
+          note: DistanceLine(pin: location),
           actionLabel: directionsLabel,
           actionIcon: directionsIcon,
           actionKey: const ValueKey('pane-find-on-maps'),
@@ -312,9 +340,11 @@ class _VendorPaneState extends State<VendorPane> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: AppSpacing.lg),
-              const _PaneHeading(
+              _PaneHeading(
                 icon: Icons.restaurant_menu,
-                text: 'More From This Stall',
+                text: widget.allItems
+                    ? 'On Sale at This Stall'
+                    : 'More From This Stall',
               ),
               const SizedBox(height: AppSpacing.sm),
               // The Running Out Soon card and size, without the stall line.

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../map/data/position_source.dart';
+import '../../../map/presentation/providers/user_location_provider.dart';
+import '../../../map/presentation/widgets/location_note.dart';
 import '../../domain/listing.dart';
 import '../../domain/search_filters.dart';
 import 'icon_scale.dart';
@@ -16,13 +20,15 @@ Future<SearchFilters?> showFilterSheet(
   BuildContext context, {
   required SearchFilters current,
   required bool hasKeyword,
+  bool showSort = true,
 }) => showModalBottomSheet<SearchFilters>(
   context: context,
   useRootNavigator: true,
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
-  builder: (context) => FilterSheet(current: current, hasKeyword: hasKeyword),
+  builder: (context) =>
+      FilterSheet(current: current, hasKeyword: hasKeyword, showSort: showSort),
 );
 
 class FilterSheet extends StatefulWidget {
@@ -30,6 +36,7 @@ class FilterSheet extends StatefulWidget {
     super.key,
     required this.current,
     required this.hasKeyword,
+    this.showSort = true,
   });
 
   // The sheet never covers more than this share of the screen; it scrolls inside.
@@ -37,6 +44,8 @@ class FilterSheet extends StatefulWidget {
 
   final SearchFilters current;
   final bool hasKeyword;
+  // The map has no order, so its sheet leaves out Sort By.
+  final bool showSort;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -52,6 +61,27 @@ class _FilterSheetState extends State<FilterSheet> {
 
   void _update(SearchFilters next) => setState(() => _draft = next);
 
+  bool _nearestBlocked = false;
+  bool _locating = false;
+
+  static const String noFix = "Couldn't find your location. Try again.";
+
+  // Nearest needs the customer's location, so picking it asks for it.
+  Future<void> _pickNearest(UserLocationProvider location) async {
+    if (location.position == null) {
+      setState(() => _locating = true);
+      await location.requestAndLocate();
+      if (!mounted) return;
+      setState(() => _locating = false);
+    }
+    if (location.position == null) {
+      setState(() => _nearestBlocked = true);
+      return;
+    }
+    setState(() => _nearestBlocked = false);
+    _update(_draft.copyWith(sort: SearchSort.nearest));
+  }
+
   Set<String> _toggled(Set<String> values, String value) =>
       values.contains(value)
       ? ({...values}..remove(value))
@@ -62,9 +92,12 @@ class _FilterSheetState extends State<FilterSheet> {
     final theme = Theme.of(context);
     final current = widget.current.forKeyword(hasKeyword: widget.hasKeyword);
     final changed = _draft != current;
+    final location = context.watch<UserLocationProvider?>();
     final sorts = [
       for (final sort in SearchSort.values)
-        if (sort != SearchSort.bestMatch || widget.hasKeyword) sort,
+        if ((sort != SearchSort.bestMatch || widget.hasKeyword) &&
+            (sort != SearchSort.nearest || location != null))
+          sort,
     ];
     final selectedSort = _draft.sortFor(hasKeyword: widget.hasKeyword);
     final price = _draft.maxPrice ?? SearchFilters.highestMaxPrice;
@@ -98,22 +131,47 @@ class _FilterSheetState extends State<FilterSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _Heading('Sort By'),
-                  _Chips(
-                    children: [
-                      for (final sort in sorts)
-                        ChoiceChip(
-                          key: ValueKey('sort-${sort.value}'),
-                          label: Text(sort.label),
-                          selected: sort == selectedSort,
-                          onSelected: (_) => _update(
-                            _draft.copyWith(
-                              sort: sort == _defaultSort ? null : sort,
-                            ),
+                  if (widget.showSort) ...[
+                    const _Heading('Sort By'),
+                    _Chips(
+                      children: [
+                        for (final sort in sorts)
+                          ChoiceChip(
+                            key: ValueKey('sort-${sort.value}'),
+                            label: Text(sort.label),
+                            selected: sort == selectedSort,
+                            onSelected: _locating
+                                ? null
+                                : (_) => sort == SearchSort.nearest
+                                      ? _pickNearest(location!)
+                                      : _update(
+                                          _draft.copyWith(
+                                            sort: sort == _defaultSort
+                                                ? null
+                                                : sort,
+                                          ),
+                                        ),
                           ),
-                        ),
-                    ],
-                  ),
+                      ],
+                    ),
+                    if (_nearestBlocked && location != null)
+                      location.access == LocationAccess.allowed
+                          ? Padding(
+                              key: const ValueKey('nearest-no-fix'),
+                              padding: const EdgeInsets.only(
+                                top: AppSpacing.xs,
+                              ),
+                              child: Text(
+                                noFix,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            )
+                          : const LocationNote(
+                              padding: EdgeInsets.only(top: AppSpacing.xs),
+                            ),
+                  ],
                   const _Heading('Category'),
                   _Chips(
                     children: [

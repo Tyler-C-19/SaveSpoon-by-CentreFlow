@@ -132,66 +132,82 @@ class _ActiveFilterChipsState extends State<ActiveFilterChips> {
     });
 
     const fade = ActiveFilterChips.fadeWidth;
+    // Clear All stays at the right end, outside the row that scrolls.
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: ShaderMask(
-        key: const ValueKey('active-filter-row'),
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (bounds) => LinearGradient(
-          colors: [
-            _moreBefore ? Colors.transparent : Colors.white,
-            Colors.white,
-            Colors.white,
-            _moreAfter ? Colors.transparent : Colors.white,
-          ],
-          stops: [
-            0,
-            (fade / bounds.width).clamp(0.0, 0.5),
-            (1 - fade / bounds.width).clamp(0.5, 1.0),
-            1,
-          ],
-        ).createShader(bounds),
-        child: SingleChildScrollView(
-          controller: _scroll,
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final (key, label, _) in chips)
-                AnimatedSize(
-                  key: ValueKey('active-filter-space-$key'),
-                  duration: ActiveFilterChips.leaving,
-                  child: AnimatedOpacity(
-                    duration: ActiveFilterChips.leaving,
-                    opacity: _leaving.contains(key) ? 0 : 1,
-                    child: _leaving.contains(key)
-                        ? const SizedBox(height: kMinInteractiveDimension)
-                        : Padding(
-                            padding: const EdgeInsets.only(
-                              right: AppSpacing.sm,
-                            ),
-                            child: InputChip(
-                              key: ValueKey('active-filter-$key'),
-                              label: Text(label),
-                              visualDensity: VisualDensity.compact,
-                              deleteIcon: Icon(
-                                Icons.close,
-                                size: 16 * iconScale(context),
-                              ),
-                              onDeleted: () => _removeChip({key}),
-                              deleteButtonTooltipMessage: 'Remove',
-                            ),
-                          ),
-                  ),
+      child: Row(
+        children: [
+          Expanded(
+            child: ShaderMask(
+              key: const ValueKey('active-filter-row'),
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [
+                  _moreBefore ? Colors.transparent : Colors.white,
+                  Colors.white,
+                  Colors.white,
+                  _moreAfter ? Colors.transparent : Colors.white,
+                ],
+                stops: [
+                  0,
+                  (fade / bounds.width).clamp(0.0, 0.5),
+                  (1 - fade / bounds.width).clamp(0.5, 1.0),
+                  1,
+                ],
+              ).createShader(bounds),
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final (key, label, _) in chips)
+                      AnimatedSize(
+                        key: ValueKey('active-filter-space-$key'),
+                        duration: ActiveFilterChips.leaving,
+                        child: AnimatedOpacity(
+                          duration: ActiveFilterChips.leaving,
+                          opacity: _leaving.contains(key) ? 0 : 1,
+                          child: _leaving.contains(key)
+                              ? const SizedBox(height: kMinInteractiveDimension)
+                              : Padding(
+                                  padding: const EdgeInsets.only(
+                                    right: AppSpacing.sm,
+                                  ),
+                                  child: InputChip(
+                                    key: ValueKey('active-filter-$key'),
+                                    label: Text(label),
+                                    visualDensity: VisualDensity.compact,
+                                    deleteIcon: Icon(
+                                      Icons.close,
+                                      size: 16 * iconScale(context),
+                                    ),
+                                    onDeleted: () => _removeChip({key}),
+                                    deleteButtonTooltipMessage: 'Remove',
+                                  ),
+                                ),
+                        ),
+                      ),
+                  ],
                 ),
-              TextButton(
+              ),
+            ),
+          ),
+          // Never wider than half the screen; it shrinks with very large text.
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width / 2,
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: TextButton(
                 key: const ValueKey('active-filter-clear-all'),
                 onPressed: () =>
                     _removeChip({for (final (key, _, _) in chips) key}),
                 child: const Text('Clear All'),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
