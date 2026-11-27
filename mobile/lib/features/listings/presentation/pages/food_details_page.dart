@@ -13,6 +13,7 @@ import '../../../seller_profile/presentation/widgets/pickup_info_row.dart';
 import '../../../seller_profile/domain/vendor_info.dart';
 import '../../../seller_profile/presentation/widgets/vendor_details_card.dart';
 import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
+import '../../../map/presentation/widgets/distance_pill.dart';
 import '../../data/listing_repository.dart';
 import '../../domain/listing.dart';
 import '../widgets/category_picker.dart';
@@ -414,6 +415,7 @@ class _Details extends StatelessWidget {
                 icon: Icons.location_on_outlined,
                 label: 'Pickup address',
                 value: address,
+                note: DistanceLine(pin: location),
                 actionLabel: directionsLabel,
                 actionIcon: directionsIcon,
                 actionKey: const ValueKey('details-find-on-maps'),

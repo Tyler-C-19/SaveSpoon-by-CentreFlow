@@ -102,7 +102,7 @@ class Listing {
     imageThumbUrl: json['imageThumbUrl'] as String?,
     imageOriginalUrl: json['imageOriginalUrl'] as String?,
     imageCrop: PhotoCrop.fromJson(json['imageCrop']),
-    pickupLocation: geoPointFrom(json['pickupLocation']),
+    pickupLocation: geoPointFrom(json['pickupLocation'] ?? json['location']),
     pickupPlaceId: json['pickupPlaceId'] as String?,
     vendorPhone: json['vendorPhone'] as String?,
   );
@@ -132,7 +132,7 @@ class Listing {
   // Vendor only: the stored original and its framing, for re-framing.
   final String? imageOriginalUrl;
   final PhotoCrop? imageCrop;
-  // Details page only: the stall's pin and contact number.
+  // The stall's pin; the contact number is on the details page only.
   final GeoPoint? pickupLocation;
   final String? pickupPlaceId;
   final String? vendorPhone;

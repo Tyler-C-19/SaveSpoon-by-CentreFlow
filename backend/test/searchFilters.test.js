@@ -114,6 +114,37 @@ test('each sort orders the results, ties newest first', async () => {
   assert.deepEqual(stage(calls[0], '$sort'), expected.price_asc);
 });
 
+test('Nearest needs a valid location, rounded to about 110 m', () => {
+  for (const bad of [
+    { sort: 'nearest' }, { sort: 'nearest', lat: '1.55' }, { lat: 'abc', lng: '103.6' },
+    { lat: '91', lng: '103.6' }, { lat: '1.5', lng: '181' }, { lat: ['1'], lng: '103.6' }, { lat: '1.1234567', lng: '103.6' },
+  ]) {
+    assert.ok(parseFilters(bad).error, JSON.stringify(bad));
+  }
+  assert.equal(parseFilters({ sort: 'nearest' }).error, 'Nearest needs your location.');
+  const good = parseFilters({ sort: 'nearest', lat: '1.559049', lng: '103.638512' });
+  assert.deepEqual(good.near, [103.639, 1.559]);
+  assert.equal(good.filtered, false);
+  assert.equal(parseFilters({}).near, null);
+});
+
+test('Nearest sorts by straight-line distance from the rounded location, ties newest first', async () => {
+  const res = await search('sort=nearest&lat=1.5590&lng=103.6385&halal=1');
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(stage(calls[0], '$sort'), { _distance: 1, _listedAt: -1, _id: -1 });
+  const distance = calls[0].find((item) => item.$addFields?._distance).$addFields._distance;
+  assert.ok(JSON.stringify(distance).includes('$location.coordinates'));
+  assert.ok(JSON.stringify(distance).includes('103.639'));
+  assert.equal(stage(calls[0], '$project')._distance, undefined);
+  assert.equal((await search('sort=nearest')).status, 400);
+});
+
+test('other sorts never work out a distance', async () => {
+  await search('sort=newest&lat=1.559&lng=103.6385');
+  assert.equal(calls[0].some((item) => item.$addFields?._distance), false);
+});
+
 test('Biggest Saving works out the share saved, and never divides by 0', async () => {
   await search('sort=saving');
   const saving = calls[0].find((item) => item.$addFields?._saving).$addFields._saving.$cond;

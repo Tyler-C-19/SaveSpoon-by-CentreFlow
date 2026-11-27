@@ -24,6 +24,8 @@ import 'features/notifications/presentation/providers/notifications_controller.d
 import 'features/orders/data/order_repository.dart';
 import 'features/profile/data/profile_repository.dart';
 import 'features/seller_profile/data/vendor_repository.dart';
+import 'features/map/data/position_source.dart';
+import 'features/map/presentation/providers/user_location_provider.dart';
 
 void main() {
   runApp(SaveSpoonApp(push: FirebasePushPlatform()));
@@ -36,11 +38,13 @@ class SaveSpoonApp extends StatefulWidget {
     this.httpClient,
     this.push,
     this.googleAuth,
+    this.positionSource,
   });
 
   final TokenStorage? storage;
   final http.Client? httpClient;
   final GoogleAuthService? googleAuth;
+  final PositionSource? positionSource;
 
   // Firebase on phones; nothing in tests.
   final PushPlatform? push;
@@ -133,6 +137,11 @@ class _SaveSpoonAppState extends State<SaveSpoonApp> {
         ChangeNotifierProvider<ListingChanges>.value(value: _listingChanges),
         ChangeNotifierProvider<FavouritesProvider>(
           create: (_) => FavouritesProvider(FavouritesRepository(_api)),
+        ),
+        ChangeNotifierProvider<UserLocationProvider>(
+          create: (_) => UserLocationProvider(
+            widget.positionSource ?? DevicePositionSource(),
+          )..start(),
         ),
       ],
       child: MaterialApp.router(

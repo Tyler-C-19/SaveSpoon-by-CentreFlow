@@ -11,6 +11,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/auto_refresh.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../seller_profile/presentation/widgets/vendor_pane.dart';
+import '../../../map/presentation/pages/food_map_page.dart';
+import '../../../map/presentation/providers/user_location_provider.dart';
+import '../../../seller_profile/domain/geo_point.dart';
 import '../../data/listing_repository.dart';
 import '../../data/recent_searches.dart';
 import '../../data/saved_filters.dart';
@@ -277,6 +280,17 @@ class _SearchPageState extends State<SearchPage>
     _startFade.forward(from: 0);
   }
 
+  // Nearest falls back to the default sort while the location is unknown.
+  ({SearchFilters filters, GeoPoint? near}) get _sent {
+    if (_filters.sort != SearchSort.nearest) {
+      return (filters: _filters, near: null);
+    }
+    final near = context.read<UserLocationProvider?>()?.position;
+    return near == null
+        ? (filters: _filters.copyWith(sort: null), near: null)
+        : (filters: _filters, near: near);
+  }
+
   // Earlier results stay on screen while the next search loads.
   Future<void> _search(String term, {bool silent = false}) async {
     final request = ++_requestId;
@@ -289,9 +303,11 @@ class _SearchPageState extends State<SearchPage>
       });
     }
     try {
+      final sent = _sent;
       final found = await context.read<ListingRepository>().search(
         term,
-        filters: _filters,
+        filters: sent.filters,
+        near: sent.near,
       );
       if (!mounted || request != _requestId) return;
       setState(() {
@@ -322,9 +338,11 @@ class _SearchPageState extends State<SearchPage>
     if (_results == null) return _search(_query);
     final request = _requestId;
     try {
+      final sent = _sent;
       final found = await context.read<ListingRepository>().search(
         _query,
-        filters: _filters,
+        filters: sent.filters,
+        near: sent.near,
       );
       if (!mounted || request != _requestId) return;
       setState(() {
@@ -374,10 +392,12 @@ class _SearchPageState extends State<SearchPage>
       _loadMoreError = null;
     });
     try {
+      final sent = _sent;
       final next = await context.read<ListingRepository>().search(
         _query,
         page: _page + 1,
-        filters: _filters,
+        filters: sent.filters,
+        near: sent.near,
       );
       if (!mounted || request != _requestId) return;
       final seen = {for (final item in _results!) item.id};
@@ -457,10 +477,23 @@ class _SearchPageState extends State<SearchPage>
                 icon: Icon(Icons.close, size: 24 * iconScale(context)),
                 onPressed: _clear,
               ),
+            _mapButton(),
             _filterButton(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _mapButton() {
+    return IconButton(
+      key: const ValueKey('search-map-button'),
+      tooltip: 'Map',
+      onPressed: () {
+        _focus.unfocus();
+        openFoodMap(context, query: _controller.text, filters: _filters);
+      },
+      icon: Icon(Icons.map_outlined, size: 24 * iconScale(context)),
     );
   }
 

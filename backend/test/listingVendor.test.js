@@ -135,7 +135,21 @@ test('other listings are this stall\'s available ones, without the current one, 
   assert.equal(pipeline.find((stage) => stage.$sort).$sort.soldCount, -1);
   const projection = pipeline.at(-1).$project;
   assert.equal(projection.vendor, undefined);
-  assert.equal(projection.location, undefined);
+  assert.equal(projection.location, '$location.coordinates');
+});
+
+test('from the map, the stall\'s items include the one used to open it', async () => {
+  const vendor = vendorDoc();
+  const listing = listingDoc(vendor);
+  const { token, aggregate } = setUp({ listing, vendor });
+
+  const res = await call(`${vendorUrl(listing)}?all=1`, token);
+
+  assert.equal(res.status, 200);
+  const [, own] = aggregate.mock.calls[0].arguments[0];
+  assert.equal(String(own.$match.vendor), String(vendor._id));
+  assert.equal(own.$match._id, undefined);
+  assert.equal((await call(`${vendorUrl(listing)}?all=yes`, token)).status, 400);
 });
 
 test('vendor info returns 404 when the listing or vendor is gone', async () => {

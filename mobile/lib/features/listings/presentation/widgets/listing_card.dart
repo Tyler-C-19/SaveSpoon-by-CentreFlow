@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/listing.dart';
+import '../../../map/presentation/widgets/distance_pill.dart';
 import 'favourite_button.dart';
 import 'icon_scale.dart';
 import 'listing_image.dart';
@@ -181,6 +182,13 @@ class ListingCard extends StatelessWidget {
                           bottom: AppSpacing.sm,
                           right: AppSpacing.sm,
                           child: SavePill(listing: listing),
+                        ),
+                      if (unlisted == null && !showRelist && !inStallPane)
+                        PhotoDistance(
+                          pin: listing.pickupLocation,
+                          besideText: showBadges
+                              ? 'Save ${listing.savePercent}%'
+                              : null,
                         ),
                     ],
                   ),

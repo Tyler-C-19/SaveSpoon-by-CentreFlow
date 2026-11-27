@@ -1,9 +1,12 @@
 const { CATEGORIES, ALLERGENS } = require('../models/listingOptions');
 
-const SORTS = ['best', 'newest', 'price_asc', 'price_desc', 'ending', 'sold', 'saving'];
+const SORTS = ['best', 'newest', 'price_asc', 'price_desc', 'ending', 'sold', 'saving', 'nearest'];
 const MAX_PRICE_LIMIT = 999;
 const PRICE_PATTERN = /^\d{1,3}(\.\d{1,2})?$/;
 const FILTER_KEYS = ['category', 'halal', 'maxPrice', 'avoid', 'favourites', 'openNow'];
+const COORDINATE_PATTERN = /^-?\d{1,3}(\.\d{1,6})?$/;
+// About 110 m, so the exact spot isn't used.
+const roundCoordinate = (value) => Math.round(value * 1000) / 1000;
 
 const invalid = (error) => ({ error });
 
@@ -20,6 +23,16 @@ function flag(raw, label) {
   if (raw === undefined) return { on: false };
   if (raw !== '1') return invalid(`${label} must be 1.`);
   return { on: true };
+}
+
+// The customer's location for the Nearest sort, as [lng, lat]. Only used for this request.
+function nearPoint(query) {
+  if (query.lat === undefined && query.lng === undefined) return { point: null };
+  const valid = [query.lat, query.lng].every((value) => typeof value === 'string' && COORDINATE_PATTERN.test(value));
+  const lat = Number(query.lat);
+  const lng = Number(query.lng);
+  if (!valid || Math.abs(lat) > 90 || Math.abs(lng) > 180) return invalid('Your location is not valid.');
+  return { point: [roundCoordinate(lng), roundCoordinate(lat)] };
 }
 
 // Reads the filter and sort settings from the query. Returns { error } or the settings.
@@ -50,6 +63,10 @@ function parseFilters(query) {
     sort = query.sort;
   }
 
+  const near = nearPoint(query);
+  if (near.error) return near;
+  if (sort === 'nearest' && !near.point) return invalid('Nearest needs your location.');
+
   return {
     categories: category.values,
     avoid: avoid.values,
@@ -58,6 +75,7 @@ function parseFilters(query) {
     openNow: openNow.on,
     maxPrice,
     sort,
+    near: near.point,
     filtered: FILTER_KEYS.some((key) => query[key] !== undefined),
   };
 }
@@ -73,4 +91,25 @@ function filterMatch(filters, now) {
   return match;
 }
 
-module.exports = { parseFilters, filterMatch, SORTS, MAX_PRICE_LIMIT };
+// Straight-line metres from [point] to each listing's pickup pin. Close enough for sorting on one campus.
+function withDistance([lng, lat]) {
+  const metresPerDegree = 111320;
+  const lngScale = Math.cos((lat * Math.PI) / 180);
+  const offset = (index, origin, scale) => ({
+    $multiply: [{ $subtract: [{ $arrayElemAt: ['$location.coordinates', index] }, origin] }, scale * metresPerDegree],
+  });
+  return {
+    $addFields: {
+      _distance: {
+        $sqrt: {
+          $add: [
+            { $pow: [offset(0, lng, lngScale), 2] },
+            { $pow: [offset(1, lat, 1), 2] },
+          ],
+        },
+      },
+    },
+  };
+}
+
+module.exports = { parseFilters, filterMatch, withDistance, SORTS, MAX_PRICE_LIMIT };
